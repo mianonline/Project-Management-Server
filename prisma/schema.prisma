@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MEMBER
+  MANAGER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EventType {
+  MEETING
+  DEADLINE
+  EVENT
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  password  String?
+  name      String
+  role      UserRole @default(MEMBER)
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  managedProjects Project[]       @relation("ProjectManager")
+  assignedTasks   Task[]          @relation("AssignedTasks")
+  createdTasks    Task[]          @relation("CreatedTasks")
+  teamMemberships TeamMember[]
+  eventAttendees  EventAttendee[]
+  
+
+}
+
+
+
+model Project {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  status      String   @default("active")
+  progress    Float    @default(0)
+  startDate   DateTime
+  endDate     DateTime
+  budget      Float    @default(0)
+  spent       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  managerId String @db.ObjectId
+  manager   User   @relation("ProjectManager", fields: [managerId], references: [id])
+
+   // NEW: Team Attached with Project
+  teamId    String? @db.ObjectId
+  team      Team?   @relation("TeamProjects", fields: [teamId], references: [id])
+
+  priority  TaskPriority @default(MEDIUM)
+
+  tasks          Task[]
+  sections       Section[]
+
+  calendarEvents CalendarEvent[]
+}
+
+model Section {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  projectId String  @db.ObjectId
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+}
+
+model Task {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  projectId String  @db.ObjectId
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sectionId String  @db.ObjectId
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  assignedToId String? @db.ObjectId
+  assignedTo   User?   @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  createdById String @db.ObjectId
+  createdBy   User   @relation("CreatedTasks", fields: [createdById], references: [id])
+}
+
+model Team {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  members TeamMember[]
+  
+  // Back relation to user if needed, but explicit TeamMember is better
+  // users User[]
+
+   // Opposite Side of Project → Team relation
+  projects  Project[] @relation("TeamProjects")
+}
+
+model TeamMember {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  teamId String @db.ObjectId
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+model CalendarEvent {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  type        EventType @default(EVENT)
+  startTime   DateTime
+  endTime     DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  projectId String?  @db.ObjectId
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  attendees EventAttendee[]
+}
+
+model EventAttendee {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  // Relations
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventId String        @db.ObjectId
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+}

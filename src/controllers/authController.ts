@@ -1,0 +1,190 @@
+import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+import { AuthRequest } from '../middleware/auth';
+
+const prisma = new PrismaClient();
+
+export const register = async (req: Request, res: Response) => {
+    try {
+        const { email, password, name, role } = req.body;
+
+        // Check if user exists
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (existingUser) {
+            res.status(400).json({ message: 'User already exists' });
+            return;
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Create user
+        const user = await prisma.user.create({
+            data: {
+                email,
+                password: hashedPassword,
+                name,
+                role: role || 'MEMBER',
+            },
+        });
+
+        // Generate token
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET as any,
+            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+        );
+
+        res.status(201).json({
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const login = async (req: Request, res: Response) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check if user exists
+        const user = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (!user) {
+            res.status(400).json({ message: 'Invalid credentials' });
+            return;
+        }
+
+        // Check if user has a password (OAuth users don't have passwords)
+        if (!user.password) {
+            res.status(400).json({ message: 'Please sign in with Google' });
+            return;
+        }
+
+        // Check password
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            res.status(400).json({ message: 'Invalid credentials' });
+            return;
+        }
+
+        // Generate token
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET as any,
+            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+        );
+
+        res.status(200).json({
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user?.id },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                createdAt: true,
+            },
+        });
+
+        if (!user) {
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
+export const googleAuth = async (req: Request, res: Response) => {
+    try {
+        const { email, name, photoURL } = req.body;
+
+        // Check if user exists
+        let user = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        // If user doesn't exist, create new user (Register)
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    email,
+                    name,
+                    avatar: photoURL,
+                },
+            });
+        }
+
+        // Generate token for both new and existing users
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET as any,
+            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+        );
+
+        res.status(200).json({
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
+
+// get all users for Team Members 
+export const getAllUsers = async (req: AuthRequest, res: Response) => {
+    try {
+        const users = await prisma.user.findMany({
+            select: { id: true, name: true, email: true, avatar: true, role: true }
+        });
+        res.json({ users });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching users" });
+    }
+};
