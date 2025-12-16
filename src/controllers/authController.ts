@@ -47,6 +47,7 @@ export const register = async (req: Request, res: Response) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                avatar: user.avatar,
                 role: user.role,
             },
         });
@@ -97,6 +98,7 @@ export const login = async (req: Request, res: Response) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                avatar: user.avatar,
                 role: user.role,
             },
         });
@@ -114,6 +116,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
                 id: true,
                 name: true,
                 email: true,
+                avatar: true,
                 role: true,
                 createdAt: true,
             },
@@ -136,12 +139,11 @@ export const googleAuth = async (req: Request, res: Response) => {
     try {
         const { email, name, photoURL } = req.body;
 
-        // Check if user exists
+
         let user = await prisma.user.findUnique({
             where: { email },
         });
 
-        // If user doesn't exist, create new user (Register)
         if (!user) {
             user = await prisma.user.create({
                 data: {
@@ -165,6 +167,7 @@ export const googleAuth = async (req: Request, res: Response) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                avatar: user.avatar,
                 role: user.role,
             },
         });
@@ -186,5 +189,20 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Error fetching users" });
+    }
+};
+
+// Edit Profile 
+export const editProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const { name, avatar } = req.body;
+        const user = await prisma.user.update({
+            where: { id: req.user?.id },
+            data: { name, avatar },
+        });
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error updating profile" });
     }
 };

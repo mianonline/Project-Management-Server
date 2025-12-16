@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getProfile, googleAuth, getAllUsers } from '../controllers/authController';
+import { register, login, getProfile, googleAuth, getAllUsers, editProfile } from '../controllers/authController';
 import { authMiddleware } from '../middleware/auth';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation';
@@ -28,6 +28,8 @@ router.post(
 );
 
 router.get('/profile', authMiddleware, getProfile);
+
+router.put('/profile', authMiddleware, editProfile);
 
 router.post('/google', googleAuth);
 
