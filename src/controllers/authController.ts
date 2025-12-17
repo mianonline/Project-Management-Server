@@ -183,7 +183,14 @@ export const googleAuth = async (req: Request, res: Response) => {
 export const getAllUsers = async (req: AuthRequest, res: Response) => {
     try {
         const users = await prisma.user.findMany({
-            select: { id: true, name: true, email: true, avatar: true, role: true }
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true,
+                role: true,
+                teamMemberships: { select: { teamId: true } }
+            }
         });
         res.json({ users });
     } catch (error) {

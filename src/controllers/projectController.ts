@@ -7,19 +7,28 @@ const prisma = new PrismaClient();
 
 export const createProject = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, description, startDate, endDate } = req.body;
+        const { name, description, startDate, endDate, budget, teamId } = req.body;
 
-        if (!name || !startDate || !endDate) {
-            return res.status(400).json({ error: "Required fields missing" });
+        if (!name) {
+            return res.status(400).json({ error: "Project name is required" });
         }
+
+        // Defaults if UI doesn't provide them
+        const start = startDate ? new Date(startDate) : new Date();
+        const end = endDate ? new Date(endDate) : new Date(new Date().setMonth(new Date().getMonth() + 1));
+        const initialBudget = budget ? parseFloat(budget) : 0;
 
         const project = await prisma.project.create({
             data: {
                 name,
-                description,
-                startDate: new Date(startDate),
-                endDate: new Date(endDate),
-                managerId: req.user!.id
+                description: description || '',
+                startDate: start,
+                endDate: end,
+                budget: initialBudget,
+                managerId: req.user!.id,
+                status: 'active', // Default status
+                spent: 0,
+                teamId: teamId
             }
         });
 

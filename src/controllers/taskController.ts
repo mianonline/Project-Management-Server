@@ -7,11 +7,34 @@ const prisma = new PrismaClient();
 
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, projectId, sectionId, assignedToId } = req.body;
+        const { name, projectId, assigneeId } = req.body;
+        let { sectionId } = req.body;
         const createdById = req.user!.id;
 
-        if (!name || !projectId || !sectionId) {
-            return res.status(400).json({ message: "Required fields missing" });
+        if (!name || !projectId) {
+            return res.status(400).json({ message: "Task name and Project ID are required" });
+        }
+
+        // If no sectionId provided, find the default section or create one
+        if (!sectionId) {
+            const firstSection = await prisma.section.findFirst({
+                where: { projectId },
+                orderBy: { order: 'asc' }
+            });
+
+            if (firstSection) {
+                sectionId = firstSection.id;
+            } else {
+
+                const newSection = await prisma.section.create({
+                    data: {
+                        title: 'To Do',
+                        projectId,
+                        order: 0
+                    }
+                });
+                sectionId = newSection.id;
+            }
         }
 
         const newTask = await prisma.task.create({
@@ -19,8 +42,9 @@ export const createTask = async (req: AuthRequest, res: Response) => {
                 name,
                 projectId,
                 sectionId,
-                assignedToId,
+                assignedToId: assigneeId || null,
                 createdById,
+                status: 'TODO'
             },
             include: { assignedTo: true }
         });
@@ -46,13 +70,13 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         if (projectId) where.projectId = projectId;
         if (status) where.status = status;
         if (priority) where.priority = priority;
-        if (assigneeId) where.assigneeId = assigneeId as string;
+        if (assigneeId) where.assignedToId = assigneeId as string;
 
         // Role based access
-        if (role !== 'MANAGER' && !where.assigneeId) {
+        if (role !== 'MANAGER' && !where.assignedToId) {
             // If not manager and not specifically filtering by assignee, show tasks related to user
             where.OR = [
-                { assigneeId: userId },
+                { assignedToId: userId },
                 { createdById: userId },
                 { project: { teamMembers: { some: { userId } } } } // Or tasks in projects they are part of
             ];
@@ -61,7 +85,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         const tasks = await prisma.task.findMany({
             where,
             include: {
-                assignee: { select: { id: true, name: true, avatar: true } },
+                assignedTo: { select: { id: true, name: true, avatar: true } },
                 createdBy: { select: { id: true, name: true } },
                 project: { select: { id: true, name: true } },
                 section: { select: { id: true, title: true } } // Include section info
@@ -82,11 +106,9 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
         const task = await prisma.task.findUnique({
             where: { id },
             include: {
-                assignee: { select: { id: true, name: true, avatar: true } },
+                assignedTo: { select: { id: true, name: true, avatar: true } },
                 project: { select: { id: true, name: true } },
-                section: { select: { id: true, title: true } },
-                comments: { include: { user: { select: { id: true, name: true, avatar: true } } } },
-                attachments: true
+                section: { select: { id: true, title: true } }
             }
         });
 
@@ -113,12 +135,12 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
                 status,
                 priority,
                 dueDate: dueDate ? new Date(dueDate) : undefined,
-                assigneeId,
+                assignedToId: assigneeId,
                 sectionId,
                 order
             },
             include: {
-                assignee: { select: { id: true, name: true, avatar: true } },
+                assignedTo: { select: { id: true, name: true, avatar: true } },
                 project: { select: { id: true, name: true } }
             }
         });
