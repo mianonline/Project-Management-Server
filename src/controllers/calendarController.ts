@@ -43,7 +43,7 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
         const where: any = {
             OR: [
                 { attendees: { some: { userId } } },
-                { project: { teamMembers: { some: { userId } } } }
+                { project: { team: { members: { some: { userId } } } } }
             ]
         };
 

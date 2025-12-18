@@ -31,7 +31,7 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
                 ? { status: 'active' }
                 : {
                     status: 'active',
-                    teamMembers: { some: { userId } }
+                    team: { members: { some: { userId } } }
                 }
         });
 
@@ -90,7 +90,7 @@ export const getProjectStats = async (req: AuthRequest, res: Response) => {
 
         const projectFilter = role === 'MANAGER'
             ? {}
-            : { teamMembers: { some: { userId } } };
+            : { team: { members: { some: { userId } } } };
 
         const projects = await prisma.project.findMany({
             where: projectFilter,

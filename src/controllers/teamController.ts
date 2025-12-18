@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
+import { inviteTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
+import { mailTransport } from '../utils/EmailTemplate/mail';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -96,42 +99,6 @@ export const getTeamMembers = async (req: AuthRequest, res: Response) => {
 };
 
 
-
-
-// export const getTeamMembers = async (req: AuthRequest, res: Response) => {
-//     try {
-//         const { search } = req.query;
-
-//         const whereClause: any = {};
-//         if (search) {
-//             whereClause.OR = [
-//                 { name: { contains: String(search), mode: 'insensitive' } },
-//                 { email: { contains: String(search), mode: 'insensitive' } }
-//             ];
-//         }
-
-//         // Get all users for directory (filtered by search if present)
-//         const users = await prisma.user.findMany({
-//             where: whereClause,
-//             select: {
-//                 id: true,
-//                 name: true,
-//                 email: true,
-//                 role: true,
-//                 avatar: true,
-//                 _count: {
-//                     select: { assignedTasks: true }
-//                 }
-//             }
-//         });
-
-//         res.json({ users });
-//     } catch (error) {
-//         console.error('Get team error:', error);
-//         res.status(500).json({ message: 'Error fetching team members' });
-//     }
-// };
-
 export const updateMemberRole = async (req: AuthRequest, res: Response) => {
     try {
         const { userId } = req.params;
@@ -147,3 +114,231 @@ export const updateMemberRole = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Error updating member role' });
     }
 };
+
+
+
+
+export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
+    try {
+        const { email, emails, teamName, role, message } = req.body;
+
+        let emailList: string[] = [];
+        if (emails && Array.isArray(emails)) {
+            emailList = emails;
+        } else if (email) {
+            // Support comma separated string as well
+            emailList = typeof email === 'string' ? email.split(',').map(e => e.trim()).filter(e => e) : [email];
+        }
+
+        if (emailList.length === 0 || !teamName || !role) {
+            return res.status(400).json({ message: "Required fields missing" });
+        }
+
+        // Find the team
+        const team = await prisma.team.findUnique({
+            where: { name: teamName }
+        });
+
+        if (!team) {
+            return res.status(404).json({ message: "Team not found" });
+        }
+
+        const results = [];
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+        for (const targetEmail of emailList) {
+            try {
+                // Generate unique token
+                const token = crypto.randomBytes(32).toString('hex');
+
+                // Create invitation in DB
+                await prisma.invitation.upsert({
+                    where: {
+                        email_teamId: {
+                            email: targetEmail,
+                            teamId: team.id
+                        }
+                    },
+                    update: {
+                        token,
+                        status: 'PENDING',
+                        role,
+                        invitedBy: req.user?.id
+                    },
+                    create: {
+                        email: targetEmail,
+                        teamId: team.id,
+                        role,
+                        token,
+                        invitedBy: req.user?.id
+                    }
+                });
+
+                const inviteLink = `${frontendUrl}/invitation/${token}`;
+                const html = inviteTeamEmailTemplate(
+                    req.user?.name || "Team Admin",
+                    teamName,
+                    role,
+                    inviteLink,
+                    message
+                );
+
+                await mailTransport.sendMail({
+                    from: `"DEFCON Team" <${process.env.EMAIL_USER}>`,
+                    to: targetEmail,
+                    subject: `You're invited to join ${teamName}`,
+                    html,
+                });
+
+                // NEW: Create in-app notification if user exists
+                const existingUser = await prisma.user.findUnique({
+                    where: { email: targetEmail }
+                });
+
+                if (existingUser) {
+                    await prisma.notification.create({
+                        data: {
+                            userId: existingUser.id,
+                            type: "TEAM_INVITATION",
+                            title: "Team Invitation",
+                            message: `${req.user?.name || "Someone"} invited you to join team ${teamName}`,
+                            data: {
+                                teamId: team.id,
+                                teamName: team.name,
+                                token: token,
+                                invitedBy: req.user?.name || "Team Admin"
+                            }
+                        }
+                    });
+                }
+                results.push({ email: targetEmail, status: 'sent' });
+            } catch (err) {
+                console.error(`Failed to invite ${targetEmail}:`, err);
+                results.push({ email: targetEmail, status: 'failed' });
+            }
+        }
+
+        return res.status(200).json({
+            message: emailList.length > 1 ? "Invitations processed" : "Invitation sent successfully",
+            results
+        });
+
+    } catch (error) {
+        console.error("Invite email error:", error);
+        return res.status(500).json({ message: "Failed to process invitations" });
+    }
+};
+
+export const acceptInvitation = async (req: AuthRequest, res: Response) => {
+    try {
+        const { token } = req.params;
+
+        const invitation = await prisma.invitation.findUnique({
+            where: { token },
+            include: { team: true }
+        });
+
+        if (!invitation) {
+            return res.status(404).json({ message: "Invitation not found." });
+        }
+
+        // Verify identity
+        if (req.user?.email !== invitation.email) {
+            return res.status(403).json({
+                message: `This invitation was sent to ${invitation.email}. You are logged in as ${req.user?.email}.`
+            });
+        }
+
+        // Check if already accepted
+        if (invitation.status === 'ACCEPTED') {
+            return res.status(200).json({ message: "You have already accepted this invitation!" });
+        }
+
+        if (invitation.status === 'DECLINED') {
+            return res.status(400).json({ message: "This invitation was previously declined." });
+        }
+
+        // Find user by email
+        const user = await prisma.user.findUnique({
+            where: { email: invitation.email }
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: "User account not found. Please register first." });
+        }
+
+        // Check if already in team (even if invitation record is pending)
+        const existingMember = await prisma.teamMember.findUnique({
+            where: {
+                userId_teamId: {
+                    userId: user.id,
+                    teamId: invitation.teamId
+                }
+            }
+        });
+
+        if (existingMember) {
+            // Sync invitation status just in case
+            await prisma.invitation.update({
+                where: { id: invitation.id },
+                data: { status: 'ACCEPTED' }
+            });
+            return res.status(200).json({ message: "You are already a member of this team!" });
+        }
+
+        // Add user to team
+        await prisma.teamMember.create({
+            data: {
+                userId: user.id,
+                teamId: invitation.teamId,
+                role: invitation.role
+            }
+        });
+
+        // Update invitation status
+        await prisma.invitation.update({
+            where: { id: invitation.id },
+            data: { status: 'ACCEPTED' }
+        });
+
+        return res.status(200).json({ message: `Successfully joined team ${invitation.team.name}` });
+
+    } catch (error: any) {
+        console.error("Accept invitation error:", error);
+        return res.status(500).json({ message: "Error processing invitation" });
+    }
+};
+
+export const declineInvitation = async (req: AuthRequest, res: Response) => {
+    try {
+        const { token } = req.params;
+
+        const invitation = await prisma.invitation.findUnique({
+            where: { token }
+        });
+
+        if (!invitation || invitation.status !== 'PENDING') {
+            return res.status(400).json({ message: "Invalid or expired invitation" });
+        }
+
+        // Verify identity
+        if (req.user?.email !== invitation.email) {
+            return res.status(403).json({
+                message: "You cannot decline an invitation sent to another email."
+            });
+        }
+
+        // Update invitation status
+        await prisma.invitation.update({
+            where: { id: invitation.id },
+            data: { status: 'DECLINED' }
+        });
+
+        return res.status(200).json({ message: "Invitation declined successfully" });
+
+    } catch (error) {
+        console.error("Decline invitation error:", error);
+        return res.status(500).json({ message: "Error declining invitation" });
+    }
+};
+

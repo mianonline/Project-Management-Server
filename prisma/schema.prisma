@@ -47,8 +47,7 @@ model User {
   createdTasks    Task[]          @relation("CreatedTasks")
   teamMemberships TeamMember[]
   eventAttendees  EventAttendee[]
-  
-
+  notifications   Notification[] @relation("UserNotifications")
 }
 
 
@@ -131,8 +130,10 @@ model Team {
   // Back relation to user if needed, but explicit TeamMember is better
   // users User[]
 
-   // Opposite Side of Project → Team relation
+  // Opposite Side of Project → Team relation
   projects  Project[] @relation("TeamProjects")
+
+  invitations Invitation[]
 }
 
 model TeamMember {
@@ -178,4 +179,32 @@ model EventAttendee {
   event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
+}
+
+model Invitation {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  teamId    String   @db.ObjectId
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  role      String   @default("member")
+  token     String   @unique
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  invitedBy String?  @db.ObjectId // Optional: ID of user who sent invite
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, teamId])
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // e.g., "TEAM_INVITATION"
+  title     String
+  message   String
+  data      Json?    // Store extra info like teamId, token, etc.
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -78,7 +78,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             where.OR = [
                 { assignedToId: userId },
                 { createdById: userId },
-                { project: { teamMembers: { some: { userId } } } } // Or tasks in projects they are part of
+                { project: { team: { members: { some: { userId } } } } } // Or tasks in projects they are part of
             ];
         }
 

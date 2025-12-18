@@ -50,14 +50,23 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 
         const where = role === 'MANAGER'
             ? {}
-            : { teamMembers: { some: { userId } } };
+            : { team: { members: { some: { userId } } } };
 
         const projects = await prisma.project.findMany({
             where,
             include: {
                 manager: { select: { id: true, name: true } },
-                teamMembers: { include: { user: { select: { id: true, name: true, avatar: true } } } },
-                _count: { select: { tasks: true } }
+                _count: { select: { tasks: true } },
+                tasks: { select: { status: true } },
+                team: {
+                    include: {
+                        members: {
+                            include: {
+                                user: { select: { id: true, name: true, avatar: true } }
+                            }
+                        }
+                    }
+                }
             },
             orderBy: { updatedAt: 'desc' }
         });
@@ -76,7 +85,15 @@ export const getProjectById = async (req: AuthRequest, res: Response) => {
             where: { id },
             include: {
                 manager: { select: { id: true, name: true, avatar: true } },
-                teamMembers: { include: { user: { select: { id: true, name: true, avatar: true } } } },
+                team: {
+                    include: {
+                        members: {
+                            include: {
+                                user: { select: { id: true, name: true, avatar: true } }
+                            }
+                        }
+                    }
+                },
                 tasks: {
                     include: {
                         assignedTo: { select: { id: true, name: true, avatar: true } }

@@ -11,7 +11,7 @@ export const getBudgetOverview = async (req: AuthRequest, res: Response) => {
 
         const where = role === 'MANAGER'
             ? {}
-            : { teamMembers: { some: { userId } } };
+            : { team: { members: { some: { userId } } } };
 
         const projects = await prisma.project.findMany({
             where,

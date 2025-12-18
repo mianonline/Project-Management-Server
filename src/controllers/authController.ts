@@ -36,7 +36,7 @@ export const register = async (req: Request, res: Response) => {
 
         // Generate token
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET as any,
             { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
         );
@@ -87,7 +87,7 @@ export const login = async (req: Request, res: Response) => {
 
         // Generate token
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET as any,
             { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
         );
@@ -156,7 +156,7 @@ export const googleAuth = async (req: Request, res: Response) => {
 
         // Generate token for both new and existing users
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET as any,
             { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
         );
@@ -189,7 +189,15 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
                 email: true,
                 avatar: true,
                 role: true,
-                teamMemberships: { select: { teamId: true } }
+                teamMemberships: {
+                    select: {
+                        team: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                }
             }
         });
         res.json({ users });
