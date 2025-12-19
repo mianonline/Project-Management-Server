@@ -5,18 +5,36 @@ import { AuthRequest } from '../middleware/auth';
 const prisma = new PrismaClient();
 
 
+const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
+
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, projectId, assigneeId } = req.body;
+        console.log("Create Task - Received Body:", JSON.stringify(req.body, null, 2));
+        const { name, projectId, assigneeId, description, status, priority, dueDate } = req.body;
         let { sectionId } = req.body;
         const createdById = req.user!.id;
 
         if (!name || !projectId) {
-            return res.status(400).json({ message: "Task name and Project ID are required" });
+            console.warn("Create Task - Validation Failed: Missing name or projectId");
+            return res.status(400).json({
+                message: "Task name and Project ID are required",
+                received: { name, projectId }
+            });
+        }
+
+        if (!isValidObjectId(projectId)) {
+            console.warn(`Create Task - Invalid Project ID format: ${projectId}`);
+            return res.status(400).json({ message: "Invalid Project ID format" });
+        }
+
+        if (sectionId && !isValidObjectId(sectionId)) {
+            console.warn(`Create Task - Invalid Section ID format: ${sectionId}`);
+            sectionId = undefined; // Fallback to default logic
         }
 
         // If no sectionId provided, find the default section or create one
         if (!sectionId) {
+            console.log("Create Task - Finding/Creating default section for project:", projectId);
             const firstSection = await prisma.section.findFirst({
                 where: { projectId },
                 orderBy: { order: 'asc' }
@@ -25,7 +43,6 @@ export const createTask = async (req: AuthRequest, res: Response) => {
             if (firstSection) {
                 sectionId = firstSection.id;
             } else {
-
                 const newSection = await prisma.section.create({
                     data: {
                         title: 'To Do',
@@ -40,19 +57,31 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         const newTask = await prisma.task.create({
             data: {
                 name,
+                description: description || null,
+                status: status || 'TODO',
+                priority: priority || 'MEDIUM',
+                dueDate: dueDate ? new Date(dueDate) : null,
                 projectId,
                 sectionId,
-                assignedToId: assigneeId || null,
+                assignedToId: (assigneeId && isValidObjectId(assigneeId)) ? assigneeId : null,
                 createdById,
-                status: 'TODO'
             },
-            include: { assignedTo: true }
+            include: {
+                assignedTo: { select: { id: true, name: true, avatar: true } },
+                project: { select: { id: true, name: true } },
+                section: { select: { id: true, title: true } }
+            }
         });
 
+        console.log("Create Task - Success:", newTask.id);
         res.status(201).json(newTask);
-    } catch (error) {
-        console.error("Create Task Error:", error);
-        res.status(500).json({ message: 'Error creating task', error });
+    } catch (error: any) {
+        console.error("Create Task - Critical Error:", error);
+        res.status(500).json({
+            message: 'Error creating task',
+            error: error.message || error,
+            code: error.code || 'UNKNOWN_ERROR'
+        });
     }
 };
 
@@ -60,43 +89,77 @@ export const createTask = async (req: AuthRequest, res: Response) => {
 
 export const getTasks = async (req: AuthRequest, res: Response) => {
     try {
-        const { projectId, status, priority, assigneeId } = req.query;
-        const userId = req.user!.id;
-        const role = req.user!.role;
+        const userId = req.user?.id;
+        const role = req.user?.role;
 
+        console.log(`[DEBUG] Get Tasks - User: ${userId} (${role}) Query:`, JSON.stringify(req.query));
+
+        if (!userId) {
+            return res.status(401).json({ message: "Authentication context missing" });
+        }
+
+        const { projectId, status, priority, assigneeId } = req.query;
         const where: any = {};
 
-        // Filter by query params
-        if (projectId) where.projectId = projectId;
+        // 1. Basic Filters
+        if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
+            where.projectId = projectId;
+        }
+
         if (status) where.status = status;
         if (priority) where.priority = priority;
-        if (assigneeId) where.assignedToId = assigneeId as string;
 
-        // Role based access
-        if (role !== 'MANAGER' && !where.assignedToId) {
-            // If not manager and not specifically filtering by assignee, show tasks related to user
+        if (assigneeId && typeof assigneeId === 'string' && isValidObjectId(assigneeId)) {
+            where.assignedToId = assigneeId;
+        }
+
+        // 2. Permission Based Filter
+        if (role !== 'MANAGER') {
             where.OR = [
                 { assignedToId: userId },
-                { createdById: userId },
-                { project: { team: { members: { some: { userId } } } } } // Or tasks in projects they are part of
+                { createdById: userId }
             ];
         }
 
-        const tasks = await prisma.task.findMany({
-            where,
-            include: {
-                assignedTo: { select: { id: true, name: true, avatar: true } },
-                createdBy: { select: { id: true, name: true } },
-                project: { select: { id: true, name: true } },
-                section: { select: { id: true, title: true } } // Include section info
-            },
-            orderBy: { order: 'asc' } // Order by Kanban order usually
-        });
+        console.log("[DEBUG] Get Tasks - Prisma Where:", JSON.stringify(where, null, 2));
 
-        res.json({ tasks });
-    } catch (error) {
-        console.error('Get tasks error:', error);
-        res.status(500).json({ message: 'Error fetching tasks' });
+        try {
+            const tasks = await prisma.task.findMany({
+                where,
+                include: {
+                    assignedTo: { select: { id: true, name: true, avatar: true } },
+                    createdBy: { select: { id: true, name: true } },
+                    project: { select: { id: true, name: true } },
+                    section: { select: { id: true, title: true } }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
+            return res.json({ tasks });
+        } catch (innerError: any) {
+            console.error("[DEBUG] Get Tasks - Relational Fetch Failed, attempting fallback:", innerError.message);
+
+            // Fallback: Fetch without relations to pinpoint if it's a relation/orphan issue
+            const basicTasks = await prisma.task.findMany({
+                where,
+                orderBy: { createdAt: 'desc' }
+            });
+
+            return res.json({
+                tasks: basicTasks,
+                warning: "Relational data omitted due to internal error",
+                details: innerError.message
+            });
+        }
+    } catch (error: any) {
+        console.error('[DEBUG] Get Tasks - Fatal Error:', error);
+        res.status(500).json({
+            error: "Failed to load tasks",
+            message: error.message || String(error),
+            prismaCode: error.code,
+            prismaMeta: error.meta
+        });
     }
 };
 

@@ -21,7 +21,6 @@ router.post(
     [
         body('name').notEmpty().withMessage('Task name is required'),
         body('projectId').notEmpty().withMessage('Project ID is required'),
-        body('sectionId').notEmpty().withMessage('Section ID is required'),
         validate
     ],
     createTask
