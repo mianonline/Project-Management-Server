@@ -8,16 +8,22 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
         const role = req.user!.role;
+        const { projectId } = req.query;
 
         // Define filter based on role (Managers see all, Members see assigned/created)
-        const taskFilter = role === 'MANAGER'
+        const taskFilter: any = role === 'MANAGER'
             ? {}
             : {
-                OR: [
-                    { assignedToId: userId },
-                    { createdById: userId }
+                AND: [
+                    { OR: [{ assignedToId: userId }, { createdById: userId }] },
+                    { project: { team: { members: { some: { userId } } } } }
                 ]
             };
+
+        // Apply projectId filter if provided
+        if (projectId && typeof projectId === 'string' && projectId !== 'all') {
+            taskFilter.projectId = projectId;
+        }
 
         const [totalTasks, completedTasks, inProgressTasks, canceledTasks] = await Promise.all([
             prisma.task.count({ where: taskFilter }),
@@ -26,13 +32,22 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             prisma.task.count({ where: { ...taskFilter, status: 'CANCELED' } }),
         ]);
 
+        const projectQuery: any = role === 'MANAGER'
+            ? { status: 'active' }
+            : {
+                status: 'active',
+                AND: [
+                    { team: { members: { some: { userId } } } },
+                    { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } }
+                ]
+            };
+
+        if (projectId && typeof projectId === 'string' && projectId !== 'all') {
+            projectQuery.id = projectId;
+        }
+
         const activeProjects = await prisma.project.count({
-            where: role === 'MANAGER'
-                ? { status: 'active' }
-                : {
-                    status: 'active',
-                    team: { members: { some: { userId } } }
-                }
+            where: projectQuery
         });
 
         res.json({
@@ -56,15 +71,20 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
         const role = req.user!.role;
+        const { projectId } = req.query;
 
-        const taskFilter = role === 'MANAGER'
+        const taskFilter: any = role === 'MANAGER'
             ? {}
             : {
-                OR: [
-                    { assignedToId: userId },
-                    { createdById: userId }
+                AND: [
+                    { OR: [{ assignedToId: userId }, { createdById: userId }] },
+                    { project: { team: { members: { some: { userId } } } } }
                 ]
             };
+
+        if (projectId && typeof projectId === 'string' && projectId !== 'all') {
+            taskFilter.projectId = projectId;
+        }
 
         const recentTasks = await prisma.task.findMany({
             where: taskFilter,
@@ -88,9 +108,14 @@ export const getProjectStats = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const role = req.user!.role;
 
-        const projectFilter = role === 'MANAGER'
+        const projectFilter: any = role === 'MANAGER'
             ? {}
-            : { team: { members: { some: { userId } } } };
+            : {
+                AND: [
+                    { team: { members: { some: { userId } } } },
+                    { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } }
+                ]
+            };
 
         const projects = await prisma.project.findMany({
             where: projectFilter,

@@ -48,9 +48,14 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const role = req.user!.role;
 
-        const where = role === 'MANAGER'
+        const where: any = role === 'MANAGER'
             ? {}
-            : { team: { members: { some: { userId } } } };
+            : {
+                AND: [
+                    { team: { members: { some: { userId } } } },
+                    { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } }
+                ]
+            };
 
         const projects = await prisma.project.findMany({
             where,
@@ -104,6 +109,17 @@ export const getProjectById = async (req: AuthRequest, res: Response) => {
 
         if (!project) {
             return res.status(404).json({ message: 'Project not found' });
+        }
+
+        // Permission Check for Members
+        if (req.user?.role === 'MEMBER') {
+            const isTeamMember = await prisma.teamMember.findFirst({
+                where: { userId: req.user.id, teamId: project.teamId as string }
+            });
+
+            if (!isTeamMember) {
+                return res.status(403).json({ message: "You don't have access to this project" });
+            }
         }
 
         res.json({ project });

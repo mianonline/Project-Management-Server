@@ -10,7 +10,7 @@ const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
         console.log("Create Task - Received Body:", JSON.stringify(req.body, null, 2));
-        const { name, projectId, assigneeId, description, status, priority, dueDate } = req.body;
+        const { name, projectId, assigneeId, description, status, priority, dueDate, budget } = req.body;
         let { sectionId } = req.body;
         const createdById = req.user!.id;
 
@@ -65,6 +65,7 @@ export const createTask = async (req: AuthRequest, res: Response) => {
                 sectionId,
                 assignedToId: (assigneeId && isValidObjectId(assigneeId)) ? assigneeId : null,
                 createdById,
+                budget: budget ? parseFloat(budget) : 0,
             },
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
@@ -119,6 +120,13 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
                 { assignedToId: userId },
                 { createdById: userId }
             ];
+
+            // If a specific project is requested, ensure member has team access
+            if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
+                where.project = {
+                    team: { members: { some: { userId } } }
+                };
+            }
         }
 
         console.log("[DEBUG] Get Tasks - Prisma Where:", JSON.stringify(where, null, 2));
@@ -188,7 +196,7 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
 export const updateTask = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, description, status, priority, dueDate, assigneeId, sectionId, order } = req.body;
+        const { name, description, status, priority, dueDate, assigneeId, sectionId, order, budget } = req.body;
 
         const task = await prisma.task.update({
             where: { id },
@@ -200,7 +208,8 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
                 dueDate: dueDate ? new Date(dueDate) : undefined,
                 assignedToId: assigneeId,
                 sectionId,
-                order
+                order,
+                budget: budget !== undefined ? parseFloat(budget) : undefined
             },
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },

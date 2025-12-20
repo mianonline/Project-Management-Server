@@ -48,6 +48,7 @@ model User {
   teamMemberships TeamMember[]
   eventAttendees  EventAttendee[]
   notifications   Notification[] @relation("UserNotifications")
+  comments        Comment[]
 }
 
 
@@ -103,6 +104,7 @@ model Task {
   priority    TaskPriority @default(MEDIUM)
   dueDate     DateTime?
   order       Int          @default(0)
+  budget      Float        @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -118,6 +120,21 @@ model Task {
 
   createdById String @db.ObjectId
   createdBy   User   @relation("CreatedTasks", fields: [createdById], references: [id])
+
+  comments Comment[]
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  taskId String @db.ObjectId
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId String @db.ObjectId
+  author   User   @relation(fields: [authorId], references: [id])
 }
 
 model Team {

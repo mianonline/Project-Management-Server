@@ -17,6 +17,7 @@ import teamRoutes from './routes/team';
 import reportRoutes from './routes/reports';
 import sectionsRoutes from './routes/sections';
 import notificationRoutes from './routes/notification';
+import commentRoutes from './routes/comments';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,6 +41,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sections', sectionsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/comments', commentRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

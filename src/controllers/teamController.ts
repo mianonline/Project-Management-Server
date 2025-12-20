@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
-import { inviteTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
+import { inviteTeamEmailTemplate, addedToTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
 import { mailTransport } from '../utils/EmailTemplate/mail';
 import crypto from 'crypto';
 
@@ -28,6 +28,49 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
             },
             include: { members: true }
         });
+
+        // Send notifications and emails to all members
+        if (memberIds && memberIds.length > 0) {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const users = await prisma.user.findMany({
+                where: { id: { in: memberIds } }
+            });
+
+            for (const member of users) {
+                // 1. In-app notification
+                await prisma.notification.create({
+                    data: {
+                        userId: member.id,
+                        type: "TEAM_CREATION",
+                        title: "New Team Access",
+                        message: `${req.user?.name || "Someone"} added you to team: ${name}`,
+                        data: {
+                            teamId: team.id,
+                            teamName: team.name,
+                            addedBy: req.user?.name || "Admin"
+                        }
+                    }
+                });
+
+                // 2. Email alert
+                try {
+                    const html = addedToTeamEmailTemplate(
+                        req.user?.name || "Department Admin",
+                        name,
+                        `${frontendUrl}/dashboard`
+                    );
+
+                    await mailTransport.sendMail({
+                        from: `"DEFCON Team" <${process.env.EMAIL_USER}>`,
+                        to: member.email,
+                        subject: `You've been added to ${name}`,
+                        html,
+                    });
+                } catch (err) {
+                    console.error(`Email failed for ${member.email}:`, err);
+                }
+            }
+        }
 
         res.status(201).json({ team });
 
