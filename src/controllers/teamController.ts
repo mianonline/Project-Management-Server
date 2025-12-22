@@ -385,3 +385,126 @@ export const declineInvitation = async (req: AuthRequest, res: Response) => {
     }
 };
 
+
+export const getTeamStats = async (req: AuthRequest, res: Response) => {
+    try {
+        const { teamId } = req.params;
+
+        if (!teamId) return res.status(400).json({ message: "Team ID is required" });
+
+        // 1. Get all projects belonging to this team
+        const teamProjects = await prisma.project.findMany({
+            where: { teamId: String(teamId) },
+            select: { id: true, name: true, budget: true, spent: true }
+        });
+
+        const projectIds = teamProjects.map(p => p.id);
+
+        // 2. Task Status Counts
+        const [completedTasks, totalTasks, overdueTasks] = await Promise.all([
+            prisma.task.count({ where: { projectId: { in: projectIds }, status: 'COMPLETED' } }),
+            prisma.task.count({ where: { projectId: { in: projectIds } } }),
+            prisma.task.count({
+                where: {
+                    projectId: { in: projectIds },
+                    status: { not: 'COMPLETED' },
+                    dueDate: { lt: new Date() }
+                }
+            }),
+        ]);
+
+        const incompleteTasks = totalTasks - completedTasks;
+
+        // 3. Financials
+        const totalBudget = teamProjects.reduce((sum, p) => sum + p.budget, 0);
+        const totalSpent = teamProjects.reduce((sum, p) => sum + p.spent, 0);
+
+        // 4. Monthly completed tasks for Chart (last 12 months)
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+        twelveMonthsAgo.setDate(1);
+
+        const tasksLastYear = await prisma.task.findMany({
+            where: {
+                projectId: { in: projectIds },
+                status: 'COMPLETED',
+                updatedAt: { gte: twelveMonthsAgo }
+            },
+            select: { updatedAt: true }
+        });
+
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const barchartData = Array.from({ length: 12 }).map((_, i) => {
+            const date = new Date();
+            date.setMonth(date.getMonth() - (11 - i));
+            const monthLabel = months[date.getMonth()];
+            const count = tasksLastYear.filter(t => t.updatedAt.getMonth() === date.getMonth() && t.updatedAt.getFullYear() === date.getFullYear()).length;
+            return { label: monthLabel, value: count };
+        });
+
+        // 5. Top Team Members (by completed tasks)
+        const teamMembers = await prisma.teamMember.findMany({
+            where: { teamId: String(teamId) },
+            include: { user: { select: { id: true, name: true, avatar: true, role: true } } }
+        });
+
+        const memberStats = await Promise.all(teamMembers.map(async (m) => {
+            const completedCount = await prisma.task.count({
+                where: { assignedToId: m.userId, status: 'COMPLETED', projectId: { in: projectIds } }
+            });
+            return {
+                id: m.userId,
+                name: m.user.name,
+                avatar: m.user.avatar,
+                role: m.user.role,
+                completedTasks: completedCount
+            };
+        }));
+
+        const topMembers = memberStats.sort((a, b) => b.completedTasks - a.completedTasks).slice(0, 5);
+
+        // 6. Top Earning/Spend Projects
+        const topProjects = [...teamProjects]
+            .sort((a, b) => b.spent - a.spent)
+            .slice(0, 5)
+            .map(p => ({
+                id: p.id,
+                name: p.name,
+                spent: p.spent,
+                completedTasks: 0 // Will fill if needed
+            }));
+
+        // 7. Recent Activity (Timeline)
+        const recentActivities = await prisma.task.findMany({
+            where: { projectId: { in: projectIds } },
+            orderBy: { updatedAt: 'desc' },
+            take: 10,
+            select: {
+                id: true,
+                name: true,
+                updatedAt: true,
+                status: true
+            }
+        });
+
+        res.json({
+            stats: [
+                { title: "Completed tasks", value: completedTasks, meta: `${totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(2) : 0}%` },
+                { title: "Incompleted tasks", value: incompleteTasks, meta: `${totalTasks > 0 ? ((incompleteTasks / totalTasks) * 100).toFixed(2) : 0}%` },
+                { title: "Overdue tasks", value: overdueTasks, meta: `${totalTasks > 0 ? ((overdueTasks / totalTasks) * 100).toFixed(2) : 0}%` },
+                { title: "Total Budget", value: `$${totalBudget.toLocaleString()}`, meta: `$${totalSpent.toLocaleString()} spent` },
+            ],
+            overview: {
+                totalSpent: `$${totalSpent.toLocaleString()}`,
+                chartData: barchartData
+            },
+            topMembers,
+            topProjects,
+            recentActivities
+        });
+
+    } catch (error) {
+        console.error("Get team stats error:", error);
+        res.status(500).json({ message: "Error fetching team statistics" });
+    }
+};

@@ -75,6 +75,13 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         });
 
         console.log("Create Task - Success:", newTask.id);
+
+        // Update project progress and budget consumption
+        await Promise.all([
+            updateProjectProgress(projectId),
+            updateProjectSpentBudget(projectId)
+        ]);
+
         res.status(201).json(newTask);
     } catch (error: any) {
         console.error("Create Task - Critical Error:", error);
@@ -196,6 +203,7 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
 export const updateTask = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const oldTask = await prisma.task.findUnique({ where: { id }, select: { projectId: true } });
         const { name, description, status, priority, dueDate, assigneeId, sectionId, order, budget } = req.body;
 
         const task = await prisma.task.update({
@@ -217,8 +225,13 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Update project progress
-        await updateProjectProgress(task.projectId);
+        // Update project progress and budget consumption
+        if (oldTask) {
+            await Promise.all([
+                updateProjectProgress(oldTask.projectId),
+                updateProjectSpentBudget(oldTask.projectId)
+            ]);
+        }
 
         res.json({ task });
     } catch (error) {
@@ -235,8 +248,11 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
             where: { id }
         });
 
-        // Update project progress
-        await updateProjectProgress(task.projectId);
+
+        await Promise.all([
+            updateProjectProgress(task.projectId),
+            updateProjectSpentBudget(task.projectId)
+        ]);
 
         res.json({ message: 'Task deleted successfully' });
     } catch (error) {
@@ -260,6 +276,28 @@ const updateProjectProgress = async (projectId: string) => {
         });
     } catch (error) {
         console.error('Error updating project progress:', error);
+    }
+};
+
+// Helper to update project spent budget
+const updateProjectSpentBudget = async (projectId: string) => {
+    try {
+        const result = await prisma.task.aggregate({
+            where: { projectId },
+            _sum: {
+                budget: true
+            }
+        });
+
+        const totalSpent = result._sum.budget || 0;
+
+        await prisma.project.update({
+            where: { id: projectId },
+            data: { spent: totalSpent }
+        });
+        console.log(`[DEBUG] Updated Project ${projectId} spent budget to: ${totalSpent}`);
+    } catch (error) {
+        console.error('Error updating project spent budget:', error);
     }
 };
 

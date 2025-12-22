@@ -50,6 +50,15 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             where: projectQuery
         });
 
+        // NEW: Aggregate budget data
+        const budgetStats = await prisma.project.aggregate({
+            where: projectQuery,
+            _sum: {
+                budget: true,
+                spent: true
+            }
+        });
+
         res.json({
             tasks: {
                 total: totalTasks,
@@ -59,6 +68,8 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             },
             projects: {
                 active: activeProjects,
+                totalBudget: budgetStats._sum.budget || 0,
+                totalSpent: budgetStats._sum.spent || 0
             }
         });
     } catch (error) {
