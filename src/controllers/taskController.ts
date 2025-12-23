@@ -147,13 +147,19 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
                     assignedTo: { select: { id: true, name: true, avatar: true } },
                     createdBy: { select: { id: true, name: true } },
                     project: { select: { id: true, name: true } },
-                    section: { select: { id: true, title: true } }
+                    section: { select: { id: true, title: true } },
+                    _count: { select: { comments: true } }
                 },
                 orderBy: { createdAt: 'desc' }
             });
 
+            const tasksWithCounts = tasks.map(task => ({
+                ...task,
+                comments: (task as any)._count?.comments || 0
+            }));
+
             console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
-            return res.json({ tasks });
+            return res.json({ tasks: tasksWithCounts });
         } catch (innerError: any) {
             console.error("[DEBUG] Get Tasks - Relational Fetch Failed, attempting fallback:", innerError.message);
 
@@ -188,7 +194,8 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
                 project: { select: { id: true, name: true } },
-                section: { select: { id: true, title: true } }
+                section: { select: { id: true, title: true } },
+                _count: { select: { comments: true } }
             }
         });
 
@@ -196,7 +203,12 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: 'Task not found' });
         }
 
-        res.json({ task });
+        const taskWithCount = {
+            ...task,
+            comments: (task as any)._count?.comments || 0
+        };
+
+        res.json({ task: taskWithCount });
     } catch (error) {
         res.status(500).json({ message: 'Error fetching task' });
     }
