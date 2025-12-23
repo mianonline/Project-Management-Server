@@ -10,7 +10,8 @@ const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
         console.log("Create Task - Received Body:", JSON.stringify(req.body, null, 2));
-        const { name, projectId, assigneeId, description, status, priority, dueDate, budget } = req.body;
+        const { name, projectId, assigneeId, description, status, priority, dueDate, budget, label } = req.body;
+        console.log("Create Task - Parsed Label:", label); // DEBUG LOG
         let { sectionId } = req.body;
         const createdById = req.user!.id;
 
@@ -66,11 +67,12 @@ export const createTask = async (req: AuthRequest, res: Response) => {
                 assignedToId: (assigneeId && isValidObjectId(assigneeId)) ? assigneeId : null,
                 createdById,
                 budget: budget ? parseFloat(budget) : 0,
+                label: label || [] // Save labels
             },
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
                 project: { select: { id: true, name: true } },
-                section: { select: { id: true, title: true } }
+                section: true
             }
         });
 

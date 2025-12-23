@@ -430,16 +430,19 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
                 status: 'COMPLETED',
                 updatedAt: { gte: twelveMonthsAgo }
             },
-            select: { updatedAt: true }
+            select: { updatedAt: true, budget: true }
         });
 
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const barchartData = Array.from({ length: 12 }).map((_, i) => {
             const date = new Date();
             date.setMonth(date.getMonth() - (11 - i));
-            const monthLabel = months[date.getMonth()];
-            const count = tasksLastYear.filter(t => t.updatedAt.getMonth() === date.getMonth() && t.updatedAt.getFullYear() === date.getFullYear()).length;
-            return { label: monthLabel, value: count };
+            const monthTasks = tasksLastYear.filter(t =>
+                t.updatedAt.getMonth() === date.getMonth() &&
+                t.updatedAt.getFullYear() === date.getFullYear()
+            );
+            const totalMonthlySpend = monthTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+            return { label: months[date.getMonth()], value: totalMonthlySpend };
         });
 
         // 5. Top Team Members (by completed tasks)
@@ -492,7 +495,7 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
                 { title: "Completed tasks", value: completedTasks, meta: `${totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(2) : 0}%` },
                 { title: "Incompleted tasks", value: incompleteTasks, meta: `${totalTasks > 0 ? ((incompleteTasks / totalTasks) * 100).toFixed(2) : 0}%` },
                 { title: "Overdue tasks", value: overdueTasks, meta: `${totalTasks > 0 ? ((overdueTasks / totalTasks) * 100).toFixed(2) : 0}%` },
-                { title: "Total Budget", value: `$${totalBudget.toLocaleString()}`, meta: `$${totalSpent.toLocaleString()} spent` },
+                { title: "Total Income", value: `$${totalBudget.toLocaleString()}`, meta: `${totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(2) : 0}% consumed` },
             ],
             overview: {
                 totalSpent: `$${totalSpent.toLocaleString()}`,

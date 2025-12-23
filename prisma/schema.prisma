@@ -103,6 +103,7 @@ model Task {
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   dueDate     DateTime?
+  label       String[]
   order       Int          @default(0)
   budget      Float        @default(0)
   createdAt   DateTime     @default(now())
