@@ -4,7 +4,9 @@ import {
     getTasks,
     getTaskById,
     updateTask,
-    deleteTask
+    deleteTask,
+    addSubtask,
+    toggleSubtask
 } from '../controllers/taskController';
 import { authMiddleware } from '../middleware/auth';
 import { body } from 'express-validator';
@@ -30,5 +32,9 @@ router.get('/', getTasks);
 router.get('/:id', getTaskById);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);
+
+// Subtask Routes
+router.post('/:taskId/subtasks', addSubtask);
+router.patch('/subtasks/:subtaskId', toggleSubtask);
 
 export default router;

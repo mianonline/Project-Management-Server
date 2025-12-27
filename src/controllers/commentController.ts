@@ -20,12 +20,22 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Invalid Task ID format" });
         }
 
-        const comment = await prisma.comment.create({
+        // Check if task exists
+        const task = await prisma.task.findUnique({
+            where: { id: taskId }
+        });
+
+        if (!task) {
+            return res.status(404).json({ message: "Task not found" });
+        }
+
+        const comment: any = await prisma.comment.create({
             data: {
                 content,
                 taskId,
-                authorId
-            },
+                authorId,
+                attachments: (req.body as any).attachments || []
+            } as any,
             include: {
                 author: {
                     select: {

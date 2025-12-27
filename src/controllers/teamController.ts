@@ -511,3 +511,83 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: "Error fetching team statistics" });
     }
 };
+
+export const getTeamFiles = async (req: AuthRequest, res: Response) => {
+    try {
+        const { teamId } = req.params;
+        console.log("Fetching files for teamId:", teamId);
+
+        if (!teamId) return res.status(400).json({ message: "Team ID is required" });
+
+        // 1. Get all projects in this team
+        const projects = await prisma.project.findMany({
+            where: { teamId: String(teamId) },
+            select: { id: true }
+        });
+
+        const projectIds = projects.map(p => p.id);
+        console.log(`Found ${projectIds.length} projects for team ${teamId}`);
+
+        if (projectIds.length === 0) {
+            return res.json({ files: [] });
+        }
+
+        // 2. Get all tasks for these projects
+        const tasks = await prisma.task.findMany({
+            where: { projectId: { in: projectIds } },
+            select: { id: true, name: true }
+        });
+
+        const taskIds = tasks.map(t => t.id);
+        console.log(`Found ${taskIds.length} tasks for these projects`);
+
+        if (taskIds.length === 0) {
+            return res.json({ files: [] });
+        }
+
+        // 3. Find all comments in these tasks
+        const comments = await prisma.comment.findMany({
+            where: { taskId: { in: taskIds } },
+            include: {
+                author: { select: { name: true, avatar: true } },
+                task: { select: { name: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // 4. Flatten and map to file structure (filtering non-empty attachments)
+        const files: any[] = [];
+        comments.forEach((comment: any) => {
+            if (comment.attachments && Array.isArray(comment.attachments)) {
+                comment.attachments.forEach((url: string, index: number) => {
+                    const fileName = url.split('/').pop()?.split('#')[0].split('?')[0] || `File-${index}`;
+                    const fileType = fileName.split('.').pop()?.toLowerCase() || 'unknown';
+
+                    let type: 'pdf' | 'image' | 'ppt' = 'pdf';
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) type = 'image';
+                    else if (['ppt', 'pptx'].includes(fileType)) type = 'ppt';
+
+                    files.push({
+                        id: `${comment.id}-${index}`,
+                        name: decodeURIComponent(fileName),
+                        type,
+                        size: 'Unknown',
+                        date: new Date(comment.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        author: {
+                            name: comment.author.name,
+                            avatar: comment.author.avatar || `https://ui-avatars.com/api/?name=${comment.author.name}`
+                        },
+                        url
+                    });
+                });
+            }
+        });
+
+        console.log(`Returning ${files.length} filtered files`);
+        res.json({ files });
+
+    } catch (error) {
+        console.error("Get team files error:", error);
+        res.status(500).json({ message: "Error fetching team files" });
+    }
+};

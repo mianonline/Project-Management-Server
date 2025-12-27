@@ -123,6 +123,7 @@ model Task {
   createdBy   User   @relation("CreatedTasks", fields: [createdById], references: [id])
 
   comments Comment[]
+  subtasks Subtask[]
 }
 
 model Comment {
@@ -136,6 +137,19 @@ model Comment {
 
   authorId String @db.ObjectId
   author   User   @relation(fields: [authorId], references: [id])
+  attachments String[]
+}
+
+model Subtask {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  completed Boolean  @default(false)
+  
+  taskId    String   @db.ObjectId
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Team {

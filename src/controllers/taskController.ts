@@ -7,6 +7,58 @@ const prisma = new PrismaClient();
 
 const isValidObjectId = (id: string) => /^[0-9a-fA-F]{24}$/.test(id);
 
+// Add a subtask
+export const addSubtask = async (req: AuthRequest, res: Response) => {
+    try {
+        const { taskId } = req.params;
+        const { title } = req.body;
+
+        if (!title) {
+            return res.status(400).json({ message: "Subtask title is required" });
+        }
+
+        const subtask = await prisma.subtask.create({
+            data: {
+                title,
+                taskId,
+                completed: false
+            }
+        });
+
+        res.status(201).json(subtask);
+    } catch (error: any) {
+        console.error("Add Subtask Error:", error);
+        res.status(500).json({ message: "Error adding subtask", error: error.message });
+    }
+};
+
+// Toggle subtask completion
+export const toggleSubtask = async (req: AuthRequest, res: Response) => {
+    try {
+        const { subtaskId } = req.params;
+
+        const subtask = await prisma.subtask.findUnique({
+            where: { id: subtaskId }
+        });
+
+        if (!subtask) {
+            return res.status(404).json({ message: "Subtask not found" });
+        }
+
+        const updatedSubtask = await prisma.subtask.update({
+            where: { id: subtaskId },
+            data: {
+                completed: !subtask.completed
+            }
+        });
+
+        res.json(updatedSubtask);
+    } catch (error: any) {
+        console.error("Toggle Subtask Error:", error);
+        res.status(500).json({ message: "Error toggling subtask", error: error.message });
+    }
+};
+
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
         console.log("Create Task - Received Body:", JSON.stringify(req.body, null, 2));
@@ -102,8 +154,6 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         const userId = req.user?.id;
         const role = req.user?.role;
 
-        console.log(`[DEBUG] Get Tasks - User: ${userId} (${role}) Query:`, JSON.stringify(req.query));
-
         if (!userId) {
             return res.status(401).json({ message: "Authentication context missing" });
         }
@@ -114,67 +164,67 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         // 1. Basic Filters
         if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
             where.projectId = projectId;
-        }
 
-        if (status) where.status = status;
-        if (priority) where.priority = priority;
+            // Permission Check for Project Access
+            if (role !== 'MANAGER') {
+                const project = await prisma.project.findUnique({
+                    where: { id: projectId },
+                    select: { teamId: true }
+                });
 
-        if (assigneeId && typeof assigneeId === 'string' && isValidObjectId(assigneeId)) {
-            where.assignedToId = assigneeId;
-        }
+                if (!project || !project.teamId) {
+                    return res.status(403).json({ message: "Project not found or team access error" });
+                }
 
-        // 2. Permission Based Filter
-        if (role !== 'MANAGER') {
+                const isMember = await prisma.teamMember.findUnique({
+                    where: {
+                        userId_teamId: {
+                            userId,
+                            teamId: project.teamId
+                        }
+                    }
+                });
+
+                if (!isMember) {
+                    return res.status(403).json({ message: "You don't have access to this project" });
+                }
+            }
+        } else if (role !== 'MANAGER') {
+            // No project selected? Only show tasks assigned to or created by the user
             where.OR = [
                 { assignedToId: userId },
                 { createdById: userId }
             ];
-
-            // If a specific project is requested, ensure member has team access
-            if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
-                where.project = {
-                    team: { members: { some: { userId } } }
-                };
-            }
         }
 
-        console.log("[DEBUG] Get Tasks - Prisma Where:", JSON.stringify(where, null, 2));
-
-        try {
-            const tasks = await prisma.task.findMany({
-                where,
-                include: {
-                    assignedTo: { select: { id: true, name: true, avatar: true } },
-                    createdBy: { select: { id: true, name: true } },
-                    project: { select: { id: true, name: true } },
-                    section: { select: { id: true, title: true } },
-                    _count: { select: { comments: true } }
-                },
-                orderBy: { createdAt: 'desc' }
-            });
-
-            const tasksWithCounts = tasks.map(task => ({
-                ...task,
-                comments: (task as any)._count?.comments || 0
-            }));
-
-            console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
-            return res.json({ tasks: tasksWithCounts });
-        } catch (innerError: any) {
-            console.error("[DEBUG] Get Tasks - Relational Fetch Failed, attempting fallback:", innerError.message);
-
-            // Fallback: Fetch without relations to pinpoint if it's a relation/orphan issue
-            const basicTasks = await prisma.task.findMany({
-                where,
-                orderBy: { createdAt: 'desc' }
-            });
-
-            return res.json({
-                tasks: basicTasks,
-                warning: "Relational data omitted due to internal error",
-                details: innerError.message
-            });
+        if (status) where.status = status;
+        if (priority) where.priority = priority;
+        if (assigneeId && typeof assigneeId === 'string' && isValidObjectId(assigneeId)) {
+            where.assignedToId = assigneeId;
         }
+
+        console.log(`[DEBUG] Get Tasks - Optimized Where:`, JSON.stringify(where, null, 2));
+
+        const tasks = await prisma.task.findMany({
+            where,
+            include: {
+                assignedTo: { select: { id: true, name: true, avatar: true } },
+                createdBy: { select: { id: true, name: true } },
+                project: { select: { id: true, name: true } },
+                section: { select: { id: true, title: true } },
+                _count: { select: { comments: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const tasksWithCounts = tasks.map(task => ({
+            ...task,
+            comments: (task as any)._count?.comments || 0
+        }));
+
+        console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
+        return res.json({ tasks: tasksWithCounts });
+
     } catch (error: any) {
         console.error('[DEBUG] Get Tasks - Fatal Error:', error);
         res.status(500).json({
@@ -195,6 +245,7 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
                 project: { select: { id: true, name: true } },
                 section: { select: { id: true, title: true } },
+                subtasks: { orderBy: { createdAt: 'asc' } },
                 _count: { select: { comments: true } }
             }
         });
