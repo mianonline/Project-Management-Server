@@ -5,6 +5,8 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import { errorHandler } from './middleware/errorHandler';
+import { createServer } from 'http';
+import { initSocket } from './config/socket';
 
 // Route imports
 import authRoutes from './routes/auth';
@@ -20,6 +22,7 @@ import notificationRoutes from './routes/notification';
 import commentRoutes from './routes/comments';
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -57,7 +60,8 @@ app.use(errorHandler);
 
 // Start server
 if (require.main === module) {
-    app.listen(PORT, () => {
+    initSocket(httpServer);
+    httpServer.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`API URL: http://localhost:${PORT}/api`);

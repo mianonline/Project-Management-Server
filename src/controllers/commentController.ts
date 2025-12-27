@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
+import { emitNotification } from '../config/socket';
 
 const prisma = new PrismaClient();
 
@@ -20,9 +21,22 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Invalid Task ID format" });
         }
 
-        // Check if task exists
+        // Check if task exists and get its team members
         const task = await prisma.task.findUnique({
-            where: { id: taskId }
+            where: { id: taskId },
+            include: {
+                project: {
+                    include: {
+                        team: {
+                            include: {
+                                members: {
+                                    select: { userId: true }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         if (!task) {
@@ -46,6 +60,34 @@ export const createComment = async (req: AuthRequest, res: Response) => {
                 }
             }
         });
+
+        // Trigger real-time notifications for all team members except the author
+        const teamMembers = task.project?.team?.members || [];
+        console.log(`Checking for notifications: Team has ${teamMembers.length} members. AuthorId=${authorId}`);
+
+        for (const member of teamMembers) {
+            if (member.userId !== authorId) {
+                try {
+                    const notification = await prisma.notification.create({
+                        data: {
+                            userId: member.userId,
+                            type: "NEW_COMMENT",
+                            title: "New Comment on Task",
+                            message: `${comment.author.name} commented on "${task.name}"`,
+                            data: {
+                                taskId: task.id,
+                                commentId: comment.id,
+                                commenterName: comment.author.name
+                            }
+                        }
+                    });
+                    console.log(`Notification created for member ${member.userId}, emitting now...`);
+                    emitNotification(member.userId, notification);
+                } catch (notifyErr) {
+                    console.error(`Failed to create/emit notification for member ${member.userId}:`, notifyErr);
+                }
+            }
+        }
 
         res.status(201).json(comment);
     } catch (error: any) {

@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { inviteTeamEmailTemplate, addedToTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
 import { mailTransport } from '../utils/EmailTemplate/mail';
 import crypto from 'crypto';
+import { emitNotification } from '../config/socket';
 
 const prisma = new PrismaClient();
 
@@ -38,7 +39,7 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
 
             for (const member of users) {
                 // 1. In-app notification
-                await prisma.notification.create({
+                const notification = await prisma.notification.create({
                     data: {
                         userId: member.id,
                         type: "TEAM_CREATION",
@@ -51,6 +52,9 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
                         }
                     }
                 });
+
+                // Real-time emit
+                emitNotification(member.id, notification);
 
                 // 2. Email alert
                 try {
@@ -239,7 +243,7 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
                 });
 
                 if (existingUser) {
-                    await prisma.notification.create({
+                    const notification = await prisma.notification.create({
                         data: {
                             userId: existingUser.id,
                             type: "TEAM_INVITATION",
@@ -253,6 +257,9 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
                             }
                         }
                     });
+
+                    // Real-time emit
+                    emitNotification(existingUser.id, notification);
                 }
                 results.push({ email: targetEmail, status: 'sent' });
             } catch (err) {
