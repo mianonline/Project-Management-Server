@@ -30,6 +30,9 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
             include: { members: true }
         });
 
+        const sender = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { avatar: true } });
+        const senderAvatar = sender?.avatar;
+
         // Send notifications and emails to all members
         if (memberIds && memberIds.length > 0) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -48,7 +51,8 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
                         data: {
                             teamId: team.id,
                             teamName: team.name,
-                            addedBy: req.user?.name || "Admin"
+                            addedBy: req.user?.name || "Admin",
+                            senderAvatar
                         }
                     }
                 });
@@ -192,6 +196,8 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
 
         const results = [];
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const sender = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { avatar: true } });
+        const senderAvatar = sender?.avatar;
 
         for (const targetEmail of emailList) {
             try {
@@ -253,7 +259,8 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
                                 teamId: team.id,
                                 teamName: team.name,
                                 token: token,
-                                invitedBy: req.user?.name || "Team Admin"
+                                invitedBy: req.user?.name || "Team Admin",
+                                senderAvatar
                             }
                         }
                     });

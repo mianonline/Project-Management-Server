@@ -26,7 +26,10 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             where: { id: taskId },
             include: {
                 project: {
-                    include: {
+                    select: {
+                        id: true,
+                        name: true,
+                        managerId: true,
                         team: {
                             include: {
                                 members: {
@@ -61,30 +64,37 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Trigger real-time notifications for all team members except the author
-        const teamMembers = task.project?.team?.members || [];
-        console.log(`Checking for notifications: Team has ${teamMembers.length} members. AuthorId=${authorId}`);
+        // Identify all recipients (Team Members + Project Manager)
+        const teamMembers = task.project?.team?.members.map(m => m.userId) || [];
+        const managerId = task.project?.managerId;
 
-        for (const member of teamMembers) {
-            if (member.userId !== authorId) {
+        // Use a Set to ensure unique user IDs
+        const recipients = new Set([...teamMembers]);
+        if (managerId) recipients.add(managerId);
+
+        console.log(`Checking for notifications: ${recipients.size} potential recipients. AuthorId=${authorId}`);
+
+        for (const recipientId of recipients) {
+            if (recipientId !== authorId) {
                 try {
                     const notification = await prisma.notification.create({
                         data: {
-                            userId: member.userId,
+                            userId: recipientId,
                             type: "NEW_COMMENT",
                             title: "New Comment on Task",
                             message: `${comment.author.name} commented on "${task.name}"`,
                             data: {
                                 taskId: task.id,
                                 commentId: comment.id,
-                                commenterName: comment.author.name
+                                commenterName: comment.author.name,
+                                commenterAvatar: comment.author.avatar
                             }
                         }
                     });
-                    console.log(`Notification created for member ${member.userId}, emitting now...`);
-                    emitNotification(member.userId, notification);
+                    console.log(`Notification created for user ${recipientId}, emitting now...`);
+                    emitNotification(recipientId, notification);
                 } catch (notifyErr) {
-                    console.error(`Failed to create/emit notification for member ${member.userId}:`, notifyErr);
+                    console.error(`Failed to create/emit notification for user ${recipientId}:`, notifyErr);
                 }
             }
         }

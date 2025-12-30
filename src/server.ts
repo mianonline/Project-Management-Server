@@ -55,10 +55,10 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Error Handling
+
 app.use(errorHandler);
 
-// Start server
+
 if (require.main === module) {
     initSocket(httpServer);
     httpServer.listen(PORT, () => {

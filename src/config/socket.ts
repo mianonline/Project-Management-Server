@@ -1,6 +1,18 @@
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
+import { Notification } from '@prisma/client';
+
+interface SocketUser {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+}
+
+interface AuthenticatedSocket extends Socket {
+    user?: SocketUser;
+}
 
 let io: Server;
 
@@ -13,7 +25,7 @@ export const initSocket = (server: HttpServer) => {
         }
     });
 
-    // Socket.io Middleware for Authentication
+
     io.use((socket, next) => {
         const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
 
@@ -22,24 +34,18 @@ export const initSocket = (server: HttpServer) => {
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-                id: string;
-                email: string;
-                name: string;
-                role: string;
-            };
-            (socket as any).user = decoded;
+            const decoded = jwt.verify(token, process.env.JWT_SECRET!) as SocketUser;
+            (socket as AuthenticatedSocket).user = decoded;
             next();
         } catch (err) {
             next(new Error('Authentication error: Invalid token'));
         }
     });
 
-    io.on('connection', (socket) => {
-        const user = (socket as any).user;
+    io.on('connection', (socket: Socket) => {
+        const user = (socket as AuthenticatedSocket).user;
         if (user) {
             console.log(`User connected to socket: ${user.name} (${socket.id})`);
-            // Join a room named after the userId for targeted notifications
             socket.join(user.id);
         }
 
@@ -59,7 +65,7 @@ export const getIO = () => {
 };
 
 // Helper function to send notification to a specific user
-export const emitNotification = (userId: string, notification: any) => {
+export const emitNotification = (userId: string, notification: Notification) => {
     if (io) {
         console.log(`Emitting notification to user ${userId}:`, notification.title);
         io.to(userId).emit('new_notification', notification);
