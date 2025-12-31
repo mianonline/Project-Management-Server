@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
+import { emitNotification } from '../config/socket';
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,56 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
                 project: { select: { name: true } }
             }
         });
+
+        let usersToNotify: string[] = [];
+
+        if (projectId) {
+            const projectWithTeam = await prisma.project.findFirst({
+                where: { id: projectId },
+                include: {
+                    team: {
+                        include: {
+                            members: {
+                                select: { userId: true }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (projectWithTeam?.team?.members) {
+                usersToNotify = projectWithTeam.team.members.map(m => m.userId);
+            }
+        }
+
+        usersToNotify = [...new Set([...usersToNotify, ...attendeeIds])];
+
+        const recipients = usersToNotify.filter(id => id !== creatorId);
+
+        if (recipients.length > 0) {
+            const eventDate = new Date(startTime).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+
+            const notificationsPromises = recipients.map(async (userId) => {
+                const notification = await prisma.notification.create({
+                    data: {
+                        userId,
+                        title: 'New Project Event',
+                        message: `A new event "${title}" has been scheduled for project "${event?.project?.name || 'Unknown'}" on ${eventDate}`,
+                        type: 'EVENT',
+                        isRead: false
+                    }
+                });
+
+                emitNotification(userId, notification);
+                return notification;
+            });
+
+            await Promise.all(notificationsPromises);
+        }
 
         res.status(201).json({ event });
     } catch (error) {
