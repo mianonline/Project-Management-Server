@@ -8,6 +8,9 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
     try {
         const { title, description, type, startTime, endTime, projectId, attendees } = req.body;
 
+        const creatorId = req.user!.id;
+        const attendeeIds = [...new Set([...(attendees || []), creatorId])];
+
         const event = await prisma.calendarEvent.create({
             data: {
                 title,
@@ -17,9 +20,9 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
                 endTime: new Date(endTime),
                 projectId,
                 attendees: {
-                    create: attendees?.map((userId: string) => ({
+                    create: attendeeIds.map((userId: string) => ({
                         userId
-                    })) || []
+                    }))
                 }
             },
             include: {
