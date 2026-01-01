@@ -66,34 +66,46 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // NEW: Monthly spending chart data
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-        twelveMonthsAgo.setDate(1);
+        // NEW: Daily spending chart data for current month
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
 
-        const tasksLastYear = await prisma.task.findMany({
-            where: {
-                ...taskFilter,
-                status: 'COMPLETED',
-                updatedAt: { gte: twelveMonthsAgo }
-            },
-            select: { updatedAt: true, budget: true }
-        });
+        const [tasksThisMonth, initialSpendResult] = await Promise.all([
+            prisma.task.findMany({
+                where: {
+                    ...taskFilter,
+                    status: { not: 'CANCELED' },
+                    updatedAt: { gte: startOfMonth }
+                },
+                select: { updatedAt: true, budget: true }
+            }),
+            prisma.task.aggregate({
+                where: {
+                    ...taskFilter,
+                    status: { not: 'CANCELED' },
+                    updatedAt: { lt: startOfMonth }
+                },
+                _sum: { budget: true }
+            })
+        ]);
 
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const barchartData = Array.from({ length: 12 }).map((_, i) => {
-            const date = new Date();
-            date.setMonth(date.getMonth() - (11 - i));
-            const monthTasks = tasksLastYear.filter(t =>
-                t.updatedAt.getMonth() === date.getMonth() &&
-                t.updatedAt.getFullYear() === date.getFullYear()
-            );
-            const totalMonthlySpend = monthTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
-            return { label: months[date.getMonth()], value: totalMonthlySpend };
+        const initialSpend = initialSpendResult._sum.budget || 0;
+
+        const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+        const dailyChartData = Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const dayTasks = tasksThisMonth.filter(t => t.updatedAt.getDate() === day);
+            const totalDailySpend = dayTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+            return {
+                label: day.toString().padStart(2, '0'),
+                value: totalDailySpend
+            };
         });
 
         res.json({
-            chartData: barchartData,
+            chartData: dailyChartData,
+            initialSpend,
             tasks: {
                 total: totalTasks,
                 completed: completedTasks,
@@ -138,7 +150,8 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
             take: 5,
             include: {
                 project: { select: { name: true } },
-                assignedTo: { select: { name: true, avatar: true } }
+                assignedTo: { select: { name: true, avatar: true } },
+                subtasks: true
             }
         });
 
