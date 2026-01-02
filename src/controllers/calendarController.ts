@@ -92,7 +92,7 @@ export const createEvent = async (req: AuthRequest, res: Response) => {
 export const getEvents = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
-        const { start, end } = req.query;
+        const { start, end, projectId } = req.query;
 
         const where: any = {
             OR: [
@@ -100,6 +100,10 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
                 { project: { team: { members: { some: { userId } } } } }
             ]
         };
+
+        if (projectId && projectId !== 'all') {
+            where.projectId = projectId;
+        }
 
         if (start && end) {
             where.startTime = {
