@@ -3,6 +3,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
+import crypto from 'crypto';
+import { mailTransport } from '../utils/EmailTemplate/mail';
+import { forgotPasswordEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
 
 const prisma = new PrismaClient();
 
@@ -323,5 +326,89 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Error changing password" });
+    }
+};
+
+// Forgot Password
+export const forgotPassword = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.body;
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+            return res.status(404).json({ message: "User with this email does not exist" });
+        }
+
+        if (!user.password) {
+            return res.status(400).json({ message: "This account uses social login. Please sign in with Google/Github." });
+        }
+
+        const resetToken = crypto.randomBytes(20).toString('hex');
+        const resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+
+        await prisma.user.update({
+            where: { email },
+            data: {
+                resetPasswordToken: resetToken,
+                resetPasswordExpires
+            }
+        });
+
+        const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}`;
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: "Password Reset Request",
+            html: forgotPasswordEmailTemplate(resetLink, user.name)
+        };
+
+        await mailTransport.sendMail(mailOptions);
+
+        res.json({ message: "Password reset link sent to your email" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error sending reset link" });
+    }
+};
+
+// Reset Password
+export const resetPassword = async (req: Request, res: Response) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({ message: "Token and new password are required" });
+        }
+
+        const user = await prisma.user.findFirst({
+            where: {
+                resetPasswordToken: token,
+                resetPasswordExpires: {
+                    gt: new Date()
+                }
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Invalid or expired reset token" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                password: hashedPassword,
+                resetPasswordToken: null,
+                resetPasswordExpires: null
+            }
+        });
+
+        res.json({ message: "Password has been reset successfully" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error resetting password" });
     }
 };
