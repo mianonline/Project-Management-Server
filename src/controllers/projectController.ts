@@ -51,10 +51,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         const where: any = role === 'MANAGER'
             ? {}
             : {
-                AND: [
-                    { team: { members: { some: { userId } } } },
-                    { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } }
-                ]
+                team: { members: { some: { userId } } }
             };
 
         const projects = await prisma.project.findMany({

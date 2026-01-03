@@ -49,6 +49,7 @@ export const register = async (req: Request, res: Response) => {
                 email: user.email,
                 avatar: user.avatar,
                 role: user.role,
+                hasPassword: !!user.password,
             },
         });
     } catch (error) {
@@ -107,6 +108,7 @@ export const login = async (req: Request, res: Response) => {
                 avatar: user.avatar,
                 role: user.role,
                 teamMemberships: user.teamMemberships,
+                hasPassword: !!user.password,
             },
         });
     } catch (error) {
@@ -134,7 +136,8 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
                             }
                         }
                     }
-                }
+                },
+                password: true
             },
         });
 
@@ -143,7 +146,11 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
             return;
         }
 
-        res.json(user);
+        res.json({
+            ...user,
+            hasPassword: !!user.password,
+            password: undefined
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -213,6 +220,7 @@ export const googleAuth = async (req: Request, res: Response) => {
                 avatar: user.avatar,
                 role: user.role,
                 teamMemberships: user.teamMemberships || [],
+                hasPassword: !!user.password,
             },
         });
     } catch (error) {
@@ -263,5 +271,57 @@ export const editProfile = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Error updating profile" });
+    }
+};
+
+// Change Password
+export const changePassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user?.id;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current and new passwords are required" });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+
+        if (!user || !user.password) {
+            return res.status(404).json({ message: "User not found or using social login" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Current password is incorrect" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword }
+        });
+
+        // Create and Emit Notification
+        const notification = await prisma.notification.create({
+            data: {
+                userId: userId as string,
+                type: "SECURITY_UPDATE",
+                title: "Password Changed",
+                message: "Your password was successfully updated.",
+                data: { timestamp: new Date() }
+            }
+        });
+
+        const { emitNotification } = require('../config/socket');
+        emitNotification(userId, notification);
+
+        res.json({ message: "Password updated successfully" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error changing password" });
     }
 };
