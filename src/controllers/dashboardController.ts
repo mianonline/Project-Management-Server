@@ -8,7 +8,7 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
         const role = req.user!.role;
-        const { projectId } = req.query;
+        const { projectId, year } = req.query;
 
         // Define filter based on role (Managers see all, Members see assigned/created)
         const taskFilter: any = role === 'MANAGER'
@@ -66,45 +66,70 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // NEW: Daily spending chart data for current month
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+        // Chart data logic
+        let chartData: { label: string; value: number }[] = [];
+        let initialSpend = 0;
 
-        const [tasksThisMonth, initialSpendResult] = await Promise.all([
-            prisma.task.findMany({
+        if (year && typeof year === 'string') {
+            const selectedYear = parseInt(year);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+            const tasksByYear = await prisma.task.findMany({
                 where: {
                     ...taskFilter,
                     status: { not: 'CANCELED' },
-                    updatedAt: { gte: startOfMonth }
+                    createdAt: {
+                        gte: new Date(selectedYear, 0, 1),
+                        lt: new Date(selectedYear + 1, 0, 1)
+                    }
                 },
-                select: { updatedAt: true, budget: true }
-            }),
-            prisma.task.aggregate({
-                where: {
-                    ...taskFilter,
-                    status: { not: 'CANCELED' },
-                    updatedAt: { lt: startOfMonth }
-                },
-                _sum: { budget: true }
-            })
-        ]);
+                select: { createdAt: true, budget: true }
+            });
 
-        const initialSpend = initialSpendResult._sum.budget || 0;
+            chartData = months.map((month, i) => {
+                const monthTasksCount = tasksByYear.filter(t => t.createdAt.getMonth() === i).length;
+                return { label: month, value: monthTasksCount };
+            });
+        } else {
+            // Original daily Current Month logic
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
 
-        const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-        const dailyChartData = Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dayTasks = tasksThisMonth.filter(t => t.updatedAt.getDate() === day);
-            const totalDailySpend = dayTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
-            return {
-                label: day.toString().padStart(2, '0'),
-                value: totalDailySpend
-            };
-        });
+            const [tasksThisMonth, initialSpendResult] = await Promise.all([
+                prisma.task.findMany({
+                    where: {
+                        ...taskFilter,
+                        status: { not: 'CANCELED' },
+                        updatedAt: { gte: startOfMonth }
+                    },
+                    select: { updatedAt: true, budget: true }
+                }),
+                prisma.task.aggregate({
+                    where: {
+                        ...taskFilter,
+                        status: { not: 'CANCELED' },
+                        updatedAt: { lt: startOfMonth }
+                    },
+                    _sum: { budget: true }
+                })
+            ]);
+
+            initialSpend = initialSpendResult._sum.budget || 0;
+            const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            chartData = Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const dayTasks = tasksThisMonth.filter(t => t.updatedAt.getDate() === day);
+                const totalDailySpend = dayTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+                return {
+                    label: day.toString().padStart(2, '0'),
+                    value: totalDailySpend
+                };
+            });
+        }
 
         res.json({
-            chartData: dailyChartData,
+            chartData,
             initialSpend,
             tasks: {
                 total: totalTasks,

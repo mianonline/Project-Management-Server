@@ -403,6 +403,7 @@ export const declineInvitation = async (req: AuthRequest, res: Response) => {
 export const getTeamStats = async (req: AuthRequest, res: Response) => {
     try {
         const { teamId } = req.params;
+        const { year } = req.query;
 
         if (!teamId) return res.status(400).json({ message: "Team ID is required" });
 
@@ -433,31 +434,54 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
         const totalBudget = teamProjects.reduce((sum, p) => sum + p.budget, 0);
         const totalSpent = teamProjects.reduce((sum, p) => sum + p.spent, 0);
 
-        // 4. Monthly completed tasks for Chart (last 12 months)
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-        twelveMonthsAgo.setDate(1);
-
-        const tasksLastYear = await prisma.task.findMany({
-            where: {
-                projectId: { in: projectIds },
-                status: 'COMPLETED',
-                updatedAt: { gte: twelveMonthsAgo }
-            },
-            select: { updatedAt: true, budget: true }
-        });
-
+        // 4. Monthly completed tasks for Chart
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const barchartData = Array.from({ length: 12 }).map((_, i) => {
-            const date = new Date();
-            date.setMonth(date.getMonth() - (11 - i));
-            const monthTasks = tasksLastYear.filter(t =>
-                t.updatedAt.getMonth() === date.getMonth() &&
-                t.updatedAt.getFullYear() === date.getFullYear()
-            );
-            const totalMonthlySpend = monthTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
-            return { label: months[date.getMonth()], value: totalMonthlySpend };
-        });
+        let barchartData: { label: string; value: number }[] = [];
+
+        if (year && typeof year === 'string') {
+            const selectedYear = parseInt(year);
+            const tasksByYear = await prisma.task.findMany({
+                where: {
+                    projectId: { in: projectIds },
+                    status: { not: 'CANCELED' },
+                    createdAt: {
+                        gte: new Date(selectedYear, 0, 1),
+                        lt: new Date(selectedYear + 1, 0, 1)
+                    }
+                },
+                select: { createdAt: true, budget: true }
+            });
+
+            barchartData = months.map((month, i) => {
+                const monthTasksCount = tasksByYear.filter(t => t.createdAt.getMonth() === i).length;
+                return { label: month, value: monthTasksCount };
+            });
+        } else {
+            // Default: last 12 months
+            const twelveMonthsAgo = new Date();
+            twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+            twelveMonthsAgo.setDate(1);
+
+            const tasksLastYear = await prisma.task.findMany({
+                where: {
+                    projectId: { in: projectIds },
+                    status: 'COMPLETED',
+                    updatedAt: { gte: twelveMonthsAgo }
+                },
+                select: { updatedAt: true, budget: true }
+            });
+
+            barchartData = Array.from({ length: 12 }).map((_, i) => {
+                const date = new Date();
+                date.setMonth(date.getMonth() - (11 - i));
+                const monthTasks = tasksLastYear.filter(t =>
+                    t.updatedAt.getMonth() === date.getMonth() &&
+                    t.updatedAt.getFullYear() === date.getFullYear()
+                );
+                const totalMonthlySpend = monthTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+                return { label: months[date.getMonth()], value: totalMonthlySpend };
+            });
+        }
 
         // 5. Top Team Members (by completed tasks)
         const teamMembers = await prisma.teamMember.findMany({
