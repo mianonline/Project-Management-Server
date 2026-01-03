@@ -63,6 +63,17 @@ export const login = async (req: Request, res: Response) => {
 
         const user = await prisma.user.findUnique({
             where: { email },
+            include: {
+                teamMemberships: {
+                    include: {
+                        team: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         if (!user) {
@@ -95,6 +106,7 @@ export const login = async (req: Request, res: Response) => {
                 email: user.email,
                 avatar: user.avatar,
                 role: user.role,
+                teamMemberships: user.teamMemberships,
             },
         });
     } catch (error) {
@@ -114,6 +126,15 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
                 avatar: true,
                 role: true,
                 createdAt: true,
+                teamMemberships: {
+                    select: {
+                        team: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                }
             },
         });
 
@@ -137,6 +158,17 @@ export const googleAuth = async (req: Request, res: Response) => {
 
         let user = await prisma.user.findUnique({
             where: { email },
+            include: {
+                teamMemberships: {
+                    include: {
+                        team: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         if (!user) {
@@ -146,7 +178,23 @@ export const googleAuth = async (req: Request, res: Response) => {
                     name,
                     avatar: photoURL,
                 },
+                include: {
+                    teamMemberships: {
+                        include: {
+                            team: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
             });
+        }
+
+        if (!user) {
+            res.status(500).json({ message: 'Error creating user' });
+            return;
         }
 
         // Generate token for both new and existing users
@@ -164,6 +212,7 @@ export const googleAuth = async (req: Request, res: Response) => {
                 email: user.email,
                 avatar: user.avatar,
                 role: user.role,
+                teamMemberships: user.teamMemberships || [],
             },
         });
     } catch (error) {

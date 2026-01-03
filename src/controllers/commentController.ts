@@ -93,6 +93,15 @@ export const createComment = async (req: AuthRequest, res: Response) => {
                     });
                     console.log(`Notification created for user ${recipientId}, emitting now...`);
                     emitNotification(recipientId, notification);
+
+                    // Also emit a real-time comment event for updating the comment list UI
+                    const io = (require('../config/socket') as any).getIO();
+                    if (io) {
+                        io.to(recipientId).emit('new_comment', {
+                            taskId: task.id,
+                            comment: comment
+                        });
+                    }
                 } catch (notifyErr) {
                     console.error(`Failed to create/emit notification for user ${recipientId}:`, notifyErr);
                 }
