@@ -5,13 +5,14 @@ import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import { mailTransport } from '../utils/EmailTemplate/mail';
-import { forgotPasswordEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
+import { forgotPasswordEmailTemplate, welcomeEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
 
 const prisma = new PrismaClient();
 
 export const register = async (req: Request, res: Response) => {
     try {
-        const { email, password, name, role } = req.body;
+        const { email, role } = req.body;
+        let { name, password } = req.body;
 
         // Check if user exists
         const existingUser = await prisma.user.findUnique({
@@ -21,6 +22,18 @@ export const register = async (req: Request, res: Response) => {
         if (existingUser) {
             res.status(400).json({ message: 'User already exists' });
             return;
+        }
+
+        // Check if password is provided, if not generate a random one
+        let generatedPassword = "";
+        if (!password) {
+            generatedPassword = crypto.randomBytes(5).toString('hex'); // 10 characters
+            password = generatedPassword;
+        }
+
+        // Set default name if not provided
+        if (!name) {
+            name = email.split('@')[0];
         }
 
         // Hash password
@@ -37,6 +50,16 @@ export const register = async (req: Request, res: Response) => {
             },
         });
 
+        if (generatedPassword) {
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: user.email,
+                subject: "Welcome to DEFCON - Your Account Credentials",
+                html: welcomeEmailTemplate(user.name, user.email, generatedPassword)
+            };
+            await mailTransport.sendMail(mailOptions);
+        }
+
         // Generate token
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
@@ -45,7 +68,7 @@ export const register = async (req: Request, res: Response) => {
         );
 
         res.status(201).json({
-            token,
+            token: generatedPassword ? undefined : token,
             user: {
                 id: user.id,
                 name: user.name,
@@ -54,6 +77,7 @@ export const register = async (req: Request, res: Response) => {
                 role: user.role,
                 hasPassword: !!user.password,
             },
+            message: generatedPassword ? "Account created and password sent to email" : "Registration successful"
         });
     } catch (error) {
         console.error(error);

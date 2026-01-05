@@ -10,8 +10,8 @@ router.post(
     '/register',
     [
         body('email').isEmail().withMessage('Invalid email'),
-        body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-        body('name').notEmpty().withMessage('Name is required'),
+        body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+        body('name').optional().notEmpty().withMessage('Name is required'),
         validate
     ],
     register

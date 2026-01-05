@@ -259,7 +259,7 @@ export const forgotPasswordEmailTemplate = (
   </div>
 `;
 
-export const welcomeEmailTemplate = (userName: string, email: string) => `
+export const welcomeEmailTemplate = (userName: string, email: string, password?: string) => `
   <div style="background-color:#0b0b0b; padding:40px 20px;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
@@ -296,7 +296,7 @@ export const welcomeEmailTemplate = (userName: string, email: string) => `
                   <p style="margin:5px 0 15px; font-size:16px; color:#ffffff; font-weight:600;">${email}</p>
                   
                   <p style="margin:0; font-size:14px; color:#9ca3af;">Default Password:</p>
-                  <p style="margin:5px 0 0; font-size:16px; color:#facc15; font-weight:600; letter-spacing:1px;">123456789</p>
+                  <p style="margin:5px 0 0; font-size:16px; color:#facc15; font-weight:600; letter-spacing:1px;">${password || '123456789'}</p>
                 </div>
 
                 <p style="font-size:14px; color:#9ca3af; margin-top:10px;">
