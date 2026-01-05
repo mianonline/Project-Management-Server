@@ -258,3 +258,83 @@ export const forgotPasswordEmailTemplate = (
     </table>
   </div>
 `;
+
+export const welcomeEmailTemplate = (userName: string, email: string) => `
+  <div style="background-color:#0b0b0b; padding:40px 20px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr>
+        <td align="center" valign="middle">
+          <table role="presentation" width="600px" cellspacing="0" cellpadding="0" border="0"
+            style="background-color:#111111; border-radius:12px; box-shadow:0 0 20px rgba(255,193,7,0.15); overflow:hidden;">
+
+            <!-- Header -->
+            <tr>
+              <td align="center" style="background:#000000; padding:25px;">
+                <div style="margin:0; font-size:26px; letter-spacing:2px; color:#fff;">
+                  <img src="https://i.ibb.co/CpDDzZ5D/logo.png" alt="Logo" width="100"/>
+                </div>
+                <p style="margin:6px 0 0; font-size:13px; color:#9ca3af;">
+                  Secure • Collaborate • Build
+                </p>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:30px; text-align:center;">
+                <h2 style="color:#facc15; margin-bottom:15px;">
+                  Welcome to DEFCON!
+                </h2>
+
+                <p style="font-size:16px; color:#e5e7eb; line-height:1.6;">
+                  Hi <strong style="color:#ffffff;">${userName}</strong>,<br/>
+                  Your account has been successfully created. You can now log in using the credentials below:
+                </p>
+
+                <div style="background:#1a1c23; padding:20px; border-radius:8px; margin:25px 0; text-align:left;">
+                  <p style="margin:0; font-size:14px; color:#9ca3af;">Email:</p>
+                  <p style="margin:5px 0 15px; font-size:16px; color:#ffffff; font-weight:600;">${email}</p>
+                  
+                  <p style="margin:0; font-size:14px; color:#9ca3af;">Default Password:</p>
+                  <p style="margin:5px 0 0; font-size:16px; color:#facc15; font-weight:600; letter-spacing:1px;">123456789</p>
+                </div>
+
+                <p style="font-size:14px; color:#9ca3af; margin-top:10px;">
+                  We strongly recommend changing your password after your first login for better security.
+                </p>
+
+                <!-- Button -->
+                <div style="margin:35px 0;">
+                  <a href="${process.env.FRONTEND_URL}/auth/login"
+                    style="
+                      background-color:#facc15;
+                      color:#000000;
+                      padding:14px 34px;
+                      text-decoration:none;
+                      border-radius:30px;
+                      font-size:15px;
+                      font-weight:600;
+                      display:inline-block;
+                      box-shadow:0 0 12px rgba(250,204,21,0.6);
+                    ">
+                    Log In Now
+                  </a>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="background:#000000; padding:18px; text-align:center;">
+                <p style="margin:0; font-size:13px; color:#6b7280;">
+                  © ${new Date().getFullYear()} DEFCON. All rights reserved.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+`;
