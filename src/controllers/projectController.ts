@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { PrismaClient, Prisma } from '@prisma/client';
+import { AuthRequest } from '../../types';
 
 const prisma = new PrismaClient();
 
@@ -48,7 +48,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const role = req.user!.role;
 
-        const where: any = role === 'MANAGER'
+        const where: Prisma.ProjectWhereInput = role === 'MANAGER'
             ? {}
             : {
                 team: { members: { some: { userId } } }

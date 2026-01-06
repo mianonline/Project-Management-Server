@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../../types';
 import crypto from 'crypto';
 import { mailTransport } from '../utils/EmailTemplate/mail';
 import { forgotPasswordEmailTemplate, welcomeEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
@@ -63,8 +63,8 @@ export const register = async (req: Request, res: Response) => {
         // Generate token
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
-            process.env.JWT_SECRET as any,
-            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+            process.env.JWT_SECRET!,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' } as SignOptions
         );
 
         res.status(201).json({
@@ -122,8 +122,8 @@ export const login = async (req: Request, res: Response) => {
 
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
-            process.env.JWT_SECRET as any,
-            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+            process.env.JWT_SECRET!,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' } as SignOptions
         );
 
         res.status(200).json({
@@ -234,8 +234,8 @@ export const googleAuth = async (req: Request, res: Response) => {
         // Generate token for both new and existing users
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
-            process.env.JWT_SECRET as any,
-            { expiresIn: (process.env.JWT_EXPIRES_IN || '1d') as any }
+            process.env.JWT_SECRET!,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' } as SignOptions
         );
 
         res.status(200).json({

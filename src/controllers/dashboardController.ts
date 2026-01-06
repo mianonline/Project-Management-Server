@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { PrismaClient, Prisma } from '@prisma/client';
+import { AuthRequest } from '../../types';
 
 const prisma = new PrismaClient();
 
@@ -11,7 +11,7 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
         const { projectId, year } = req.query;
 
         // Define filter based on role (Managers see all, Members see assigned/created)
-        const taskFilter: any = role === 'MANAGER'
+        const taskFilter: Prisma.TaskWhereInput = role === 'MANAGER'
             ? {}
             : {
                 AND: [
@@ -39,7 +39,7 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             }),
         ]);
 
-        const projectQuery: any = role === 'MANAGER'
+        const projectQuery: Prisma.ProjectWhereInput = role === 'MANAGER'
             ? { status: 'active' }
             : {
                 status: 'active',
@@ -120,7 +120,7 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             chartData = Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1;
                 const dayTasks = tasksThisMonth.filter(t => t.updatedAt.getDate() === day);
-                const totalDailySpend = dayTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+                const totalDailySpend = dayTasks.reduce((sum, t) => sum + (t.budget || 0), 0);
                 return {
                     label: day.toString().padStart(2, '0'),
                     value: totalDailySpend
@@ -156,7 +156,7 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
         const role = req.user!.role;
         const { projectId } = req.query;
 
-        const taskFilter: any = role === 'MANAGER'
+        const taskFilter: Prisma.TaskWhereInput = role === 'MANAGER'
             ? {}
             : {
                 AND: [
@@ -192,7 +192,7 @@ export const getProjectStats = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const role = req.user!.role;
 
-        const projectFilter: any = role === 'MANAGER'
+        const projectFilter: Prisma.ProjectWhereInput = role === 'MANAGER'
             ? {}
             : {
                 AND: [

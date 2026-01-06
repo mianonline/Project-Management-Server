@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../../types';
 import { emitNotification } from '../config/socket';
 
 const prisma = new PrismaClient();
@@ -46,13 +46,13 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: "Task not found" });
         }
 
-        const comment: any = await prisma.comment.create({
+        const comment = await prisma.comment.create({
             data: {
                 content,
                 taskId,
                 authorId,
-                attachments: (req.body as any).attachments || []
-            } as any,
+                attachments: Array.isArray(req.body.attachments) ? req.body.attachments : []
+            },
             include: {
                 author: {
                     select: {
@@ -95,7 +95,8 @@ export const createComment = async (req: AuthRequest, res: Response) => {
                     emitNotification(recipientId, notification);
 
                     // Also emit a real-time comment event for updating the comment list UI
-                    const io = (require('../config/socket') as any).getIO();
+                    const { getIO } = require('../config/socket');
+                    const io = getIO();
                     if (io) {
                         io.to(recipientId).emit('new_comment', {
                             taskId: task.id,
@@ -109,9 +110,10 @@ export const createComment = async (req: AuthRequest, res: Response) => {
         }
 
         res.status(201).json(comment);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Create Comment - Error:", error);
-        res.status(500).json({ message: "Error creating comment", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: "Error creating comment", error: errorMessage });
     }
 };
 
@@ -138,9 +140,10 @@ export const getCommentsByTaskId = async (req: AuthRequest, res: Response) => {
         });
 
         res.json({ comments });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Get Comments - Error:", error);
-        res.status(500).json({ message: "Error fetching comments", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: "Error fetching comments", error: errorMessage });
     }
 };
 
@@ -166,8 +169,9 @@ export const deleteComment = async (req: AuthRequest, res: Response) => {
         });
 
         res.json({ message: "Comment deleted successfully" });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Delete Comment - Error:", error);
-        res.status(500).json({ message: "Error deleting comment", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: "Error deleting comment", error: errorMessage });
     }
 };

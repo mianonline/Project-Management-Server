@@ -1,14 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-export interface AuthRequest extends Request {
-    user?: {
-        id: string;
-        email: string;
-        role: string;
-        name: string
-    };
-}
+import { AuthRequest, UserPayload } from '../../types';
 
 export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
@@ -18,12 +10,7 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-            id: string;
-            email: string;
-            role: string;
-            name: string
-        };
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
 
         req.user = decoded;
         next();

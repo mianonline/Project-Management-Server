@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { PrismaClient, Prisma } from '@prisma/client';
+import { AuthRequest } from '../../types';
 
 const prisma = new PrismaClient();
 
@@ -26,9 +26,10 @@ export const addSubtask = async (req: AuthRequest, res: Response) => {
         });
 
         res.status(201).json(subtask);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Add Subtask Error:", error);
-        res.status(500).json({ message: "Error adding subtask", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: "Error adding subtask", error: errorMessage });
     }
 };
 
@@ -53,9 +54,10 @@ export const toggleSubtask = async (req: AuthRequest, res: Response) => {
         });
 
         res.json(updatedSubtask);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Toggle Subtask Error:", error);
-        res.status(500).json({ message: "Error toggling subtask", error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: "Error toggling subtask", error: errorMessage });
     }
 };
 
@@ -137,12 +139,14 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         ]);
 
         res.status(201).json(newTask);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Create Task - Critical Error:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCode = error instanceof Error && 'code' in error ? (error as any).code : 'UNKNOWN_ERROR';
         res.status(500).json({
             message: 'Error creating task',
-            error: error.message || error,
-            code: error.code || 'UNKNOWN_ERROR'
+            error: errorMessage,
+            code: errorCode
         });
     }
 };
@@ -159,7 +163,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         }
 
         const { projectId, status, priority, assigneeId } = req.query;
-        const where: any = {};
+        const where: Prisma.TaskWhereInput = {};
 
         // 1. Basic Filters
         if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
@@ -197,8 +201,8 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             ];
         }
 
-        if (status) where.status = status;
-        if (priority) where.priority = priority;
+        if (status && typeof status === 'string') where.status = status as any;
+        if (priority && typeof priority === 'string') where.priority = priority as any;
         if (assigneeId && typeof assigneeId === 'string' && isValidObjectId(assigneeId)) {
             where.assignedToId = assigneeId;
         }
@@ -225,13 +229,16 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
         return res.json({ tasks: tasksWithCounts });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[DEBUG] Get Tasks - Fatal Error:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCode = error instanceof Error && 'code' in error ? (error as any).code : undefined;
+        const errorMeta = error instanceof Error && 'meta' in error ? (error as any).meta : undefined;
         res.status(500).json({
             error: "Failed to load tasks",
-            message: error.message || String(error),
-            prismaCode: error.code,
-            prismaMeta: error.meta
+            message: errorMessage,
+            prismaCode: errorCode,
+            prismaMeta: errorMeta
         });
     }
 };

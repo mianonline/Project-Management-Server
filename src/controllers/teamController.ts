@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../../types';
 import { inviteTeamEmailTemplate, addedToTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
 import { mailTransport } from '../utils/EmailTemplate/mail';
 import crypto from 'crypto';
@@ -360,7 +360,7 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
 
         return res.status(200).json({ message: `Successfully joined team ${invitation.team.name}` });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Accept invitation error:", error);
         return res.status(500).json({ message: "Error processing invitation" });
     }
@@ -478,7 +478,7 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
                     t.updatedAt.getMonth() === date.getMonth() &&
                     t.updatedAt.getFullYear() === date.getFullYear()
                 );
-                const totalMonthlySpend = monthTasks.reduce((sum, t: any) => sum + (t.budget || 0), 0);
+                const totalMonthlySpend = monthTasks.reduce((sum, t) => sum + (t.budget || 0), 0);
                 return { label: months[date.getMonth()], value: totalMonthlySpend };
             });
         }
@@ -594,8 +594,16 @@ export const getTeamFiles = async (req: AuthRequest, res: Response) => {
         });
 
         // 4. Flatten and map to file structure (filtering non-empty attachments)
-        const files: any[] = [];
-        comments.forEach((comment: any) => {
+        const files: {
+            id: string;
+            name: string;
+            type: 'pdf' | 'image' | 'ppt';
+            size: string;
+            date: string;
+            author: { name: string; avatar: string };
+            url: string
+        }[] = [];
+        comments.forEach((comment) => {
             if (comment.attachments && Array.isArray(comment.attachments)) {
                 comment.attachments.forEach((url: string, index: number) => {
                     const fileName = url.split('/').pop()?.split('#')[0].split('?')[0] || `File-${index}`;

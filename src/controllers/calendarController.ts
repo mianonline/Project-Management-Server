@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth';
+import { PrismaClient, Prisma } from '@prisma/client';
+import { AuthRequest } from '../../types';
 import { emitNotification } from '../config/socket';
 
 const prisma = new PrismaClient();
@@ -94,7 +94,7 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const { start, end, projectId } = req.query;
 
-        const where: any = {
+        const where: Prisma.CalendarEventWhereInput = {
             OR: [
                 { attendees: { some: { userId } } },
                 { project: { team: { members: { some: { userId } } } } }
@@ -102,7 +102,7 @@ export const getEvents = async (req: AuthRequest, res: Response) => {
         };
 
         if (projectId && projectId !== 'all') {
-            where.projectId = projectId;
+            where.projectId = projectId as string;
         }
 
         if (start && end) {

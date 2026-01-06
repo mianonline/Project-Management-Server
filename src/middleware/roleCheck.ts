@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthRequest } from './auth';
+import { AuthRequest } from '../../types';
 
 export const requireManager = (req: AuthRequest, res: Response, next: NextFunction) => {
     if (req.user?.role !== 'MANAGER') {

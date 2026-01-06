@@ -2,17 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { Notification } from '@prisma/client';
-
-interface SocketUser {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-}
-
-interface AuthenticatedSocket extends Socket {
-    user?: SocketUser;
-}
+import { SocketUser, AuthenticatedSocket } from '../../types';
 
 let io: Server;
 
