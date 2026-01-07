@@ -255,6 +255,76 @@ export const googleAuth = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+export const githubAuth = async (req: Request, res: Response) => {
+    try {
+        const { email, name, photoURL } = req.body;
+
+
+        let user = await prisma.user.findUnique({
+            where: { email },
+            include: {
+                teamMemberships: {
+                    include: {
+                        team: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    email,
+                    name,
+                    avatar: photoURL,
+                },
+                include: {
+                    teamMemberships: {
+                        include: {
+                            team: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (!user) {
+            res.status(500).json({ message: 'Error creating user' });
+            return;
+        }
+
+        // Generate token for both new and existing users
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, name: user.name },
+            process.env.JWT_SECRET!,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' } as SignOptions
+        );
+
+        res.status(200).json({
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,
+                teamMemberships: user.teamMemberships || [],
+                hasPassword: !!user.password,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
 
 
 

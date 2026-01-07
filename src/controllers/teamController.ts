@@ -92,27 +92,33 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
 export const getTeam = async (req: AuthRequest, res: Response) => {
     try {
         const { search } = req.query;
+        const userId = req.user!.id;
+        const role = req.user!.role;
 
-        const users = await prisma.team.findMany({
-            where: search
-                ? {
-                    OR: [
-                        { name: { contains: String(search), mode: 'insensitive' } },
+        // Role-based filtering:
+        // - MANAGER sees all teams
+        // - MEMBER sees only teams they are part of
+        const where: any = role === 'MANAGER'
+            ? {}
+            : { members: { some: { userId } } };
 
-                    ]
-                }
-                : {},
+        if (search) {
+            where.name = { contains: String(search), mode: 'insensitive' };
+        }
+
+        const teams = await prisma.team.findMany({
+            where,
             select: {
                 id: true,
                 name: true,
-
             }
         });
 
-        res.json({ users });
+        // Keeping "users" as the key to maintain compatibility with current frontend state
+        res.json({ users: teams });
     } catch (error) {
-        console.error('Get team members error:', error);
-        res.status(500).json({ message: 'Error fetching team members' });
+        console.error('Get teams error:', error);
+        res.status(500).json({ message: 'Error fetching teams' });
     }
 };
 
