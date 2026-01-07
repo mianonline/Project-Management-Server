@@ -194,10 +194,24 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
                 }
             }
         } else if (role !== 'MANAGER') {
-            // No project selected? Only show tasks assigned to or created by the user
+            // Find all projects where the user is a team member
+            const userTeams = await prisma.teamMember.findMany({
+                where: { userId },
+                select: { teamId: true }
+            });
+            const teamIds = userTeams.map(t => t.teamId);
+
+            const userProjects = await prisma.project.findMany({
+                where: { teamId: { in: teamIds } },
+                select: { id: true }
+            });
+            const projectIds = userProjects.map(p => p.id);
+
+            // Show tasks that are assigned to user, created by user, OR in one of their projects
             where.OR = [
                 { assignedToId: userId },
-                { createdById: userId }
+                { createdById: userId },
+                { projectId: { in: projectIds } }
             ];
         }
 
