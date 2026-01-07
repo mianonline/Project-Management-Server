@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
-import { AuthRequest } from '../../types';
+import { PrismaClient, Prisma, TaskStatus, TaskPriority } from '@prisma/client';
+import { AuthRequest, PrismaError } from '../../types';
+
+
 
 const prisma = new PrismaClient();
 
@@ -27,7 +29,6 @@ export const addSubtask = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(subtask);
     } catch (error: unknown) {
-        console.error("Add Subtask Error:", error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({ message: "Error adding subtask", error: errorMessage });
     }
@@ -55,7 +56,6 @@ export const toggleSubtask = async (req: AuthRequest, res: Response) => {
 
         res.json(updatedSubtask);
     } catch (error: unknown) {
-        console.error("Toggle Subtask Error:", error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({ message: "Error toggling subtask", error: errorMessage });
     }
@@ -63,14 +63,11 @@ export const toggleSubtask = async (req: AuthRequest, res: Response) => {
 
 export const createTask = async (req: AuthRequest, res: Response) => {
     try {
-        console.log("Create Task - Received Body:", JSON.stringify(req.body, null, 2));
         const { name, projectId, assigneeId, description, status, priority, dueDate, budget, label } = req.body;
-        console.log("Create Task - Parsed Label:", label); // DEBUG LOG
         let { sectionId } = req.body;
         const createdById = req.user!.id;
 
         if (!name || !projectId) {
-            console.warn("Create Task - Validation Failed: Missing name or projectId");
             return res.status(400).json({
                 message: "Task name and Project ID are required",
                 received: { name, projectId }
@@ -78,18 +75,30 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         }
 
         if (!isValidObjectId(projectId)) {
-            console.warn(`Create Task - Invalid Project ID format: ${projectId}`);
             return res.status(400).json({ message: "Invalid Project ID format" });
         }
 
-        if (sectionId && !isValidObjectId(sectionId)) {
-            console.warn(`Create Task - Invalid Section ID format: ${sectionId}`);
-            sectionId = undefined; // Fallback to default logic
+        const existingTask = await prisma.task.findFirst({
+            where: {
+                projectId,
+                name: {
+                    equals: name,
+                    mode: 'insensitive'
+                }
+            }
+        });
+
+        if (existingTask) {
+            return res.status(409).json({
+                message: "A task with this name already exists in this project"
+            });
         }
 
-        // If no sectionId provided, find the default section or create one
+        if (sectionId && !isValidObjectId(sectionId)) {
+            sectionId = undefined;
+        }
+
         if (!sectionId) {
-            console.log("Create Task - Finding/Creating default section for project:", projectId);
             const firstSection = await prisma.section.findFirst({
                 where: { projectId },
                 orderBy: { order: 'asc' }
@@ -121,7 +130,7 @@ export const createTask = async (req: AuthRequest, res: Response) => {
                 assignedToId: (assigneeId && isValidObjectId(assigneeId)) ? assigneeId : null,
                 createdById,
                 budget: budget ? parseFloat(budget) : 0,
-                label: label || [] // Save labels
+                label: label || []
             },
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
@@ -130,9 +139,6 @@ export const createTask = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        console.log("Create Task - Success:", newTask.id);
-
-        // Update project progress and budget consumption
         await Promise.all([
             updateProjectProgress(projectId),
             updateProjectSpentBudget(projectId)
@@ -140,9 +146,9 @@ export const createTask = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(newTask);
     } catch (error: unknown) {
-        console.error("Create Task - Critical Error:", error);
+
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorCode = error instanceof Error && 'code' in error ? (error as any).code : 'UNKNOWN_ERROR';
+        const errorCode = error instanceof Error && 'code' in error ? (error as PrismaError).code : 'UNKNOWN_ERROR';
         res.status(500).json({
             message: 'Error creating task',
             error: errorMessage,
@@ -165,11 +171,9 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         const { projectId, status, priority, assigneeId } = req.query;
         const where: Prisma.TaskWhereInput = {};
 
-        // 1. Basic Filters
         if (projectId && typeof projectId === 'string' && isValidObjectId(projectId)) {
             where.projectId = projectId;
 
-            // Permission Check for Project Access
             if (role !== 'MANAGER') {
                 const project = await prisma.project.findUnique({
                     where: { id: projectId },
@@ -194,7 +198,6 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
                 }
             }
         } else if (role !== 'MANAGER') {
-            // Find all projects where the user is a team member
             const userTeams = await prisma.teamMember.findMany({
                 where: { userId },
                 select: { teamId: true }
@@ -207,7 +210,6 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             });
             const projectIds = userProjects.map(p => p.id);
 
-            // Show tasks that are assigned to user, created by user, OR in one of their projects
             where.OR = [
                 { assignedToId: userId },
                 { createdById: userId },
@@ -215,13 +217,11 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             ];
         }
 
-        if (status && typeof status === 'string') where.status = status as any;
-        if (priority && typeof priority === 'string') where.priority = priority as any;
+        if (status && typeof status === 'string') where.status = status as TaskStatus;
+        if (priority && typeof priority === 'string') where.priority = priority as TaskPriority;
         if (assigneeId && typeof assigneeId === 'string' && isValidObjectId(assigneeId)) {
             where.assignedToId = assigneeId;
         }
-
-        console.log(`[DEBUG] Get Tasks - Optimized Where:`, JSON.stringify(where, null, 2));
 
         const tasks = await prisma.task.findMany({
             where,
@@ -230,24 +230,35 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
                 createdBy: { select: { id: true, name: true } },
                 project: { select: { id: true, name: true } },
                 section: { select: { id: true, title: true } },
+                subtasks: { orderBy: { createdAt: 'asc' } },
                 _count: { select: { comments: true } }
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        const tasksWithCounts = tasks.map(task => ({
-            ...task,
-            comments: (task as any)._count?.comments || 0
+        const tasksWithCounts = await Promise.all(tasks.map(async (task) => {
+
+            const commentsWithAttachments = await prisma.comment.findMany({
+                where: {
+                    taskId: task.id,
+                    attachments: { isEmpty: false }
+                },
+                select: { id: true }
+            });
+
+            return {
+                ...task,
+                comments: task._count?.comments || 0,
+                attachments: commentsWithAttachments.length
+            };
         }));
 
-        console.log(`[DEBUG] Get Tasks - Found ${tasks.length} tasks`);
         return res.json({ tasks: tasksWithCounts });
 
     } catch (error: unknown) {
-        console.error('[DEBUG] Get Tasks - Fatal Error:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorCode = error instanceof Error && 'code' in error ? (error as any).code : undefined;
-        const errorMeta = error instanceof Error && 'meta' in error ? (error as any).meta : undefined;
+        const errorCode = error instanceof Error && 'code' in error ? (error as PrismaError).code : undefined;
+        const errorMeta = error instanceof Error && 'meta' in error ? (error as PrismaError).meta : undefined;
         res.status(500).json({
             error: "Failed to load tasks",
             message: errorMessage,
@@ -277,7 +288,7 @@ export const getTaskById = async (req: AuthRequest, res: Response) => {
 
         const taskWithCount = {
             ...task,
-            comments: (task as any)._count?.comments || 0
+            comments: task._count?.comments || 0
         };
 
         res.json({ task: taskWithCount });
@@ -311,7 +322,6 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Update project progress and budget consumption
         if (oldTask) {
             await Promise.all([
                 updateProjectProgress(oldTask.projectId),
@@ -321,7 +331,6 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
 
         res.json({ task });
     } catch (error) {
-        console.error('Update task error:', error);
         res.status(500).json({ message: 'Error updating task' });
     }
 };
@@ -346,7 +355,6 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Helper to update project progress
 const updateProjectProgress = async (projectId: string) => {
     try {
         const totalTasks = await prisma.task.count({ where: { projectId } });
@@ -365,7 +373,7 @@ const updateProjectProgress = async (projectId: string) => {
     }
 };
 
-// Helper to update project spent budget
+
 const updateProjectSpentBudget = async (projectId: string) => {
     try {
         const result = await prisma.task.aggregate({
@@ -381,7 +389,6 @@ const updateProjectSpentBudget = async (projectId: string) => {
             where: { id: projectId },
             data: { spent: totalSpent }
         });
-        console.log(`[DEBUG] Updated Project ${projectId} spent budget to: ${totalSpent}`);
     } catch (error) {
         console.error('Error updating project spent budget:', error);
     }

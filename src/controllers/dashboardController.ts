@@ -10,7 +10,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
         const role = req.user!.role;
         const { projectId, year } = req.query;
 
-        // Define filter based on role (Managers see all, Members see assigned/created)
         const taskFilter: Prisma.TaskWhereInput = role === 'MANAGER'
             ? {}
             : {
@@ -20,7 +19,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
                 ]
             };
 
-        // Apply projectId filter if provided
         if (projectId && typeof projectId === 'string' && projectId !== 'all') {
             taskFilter.projectId = projectId;
         }
@@ -57,7 +55,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             where: projectQuery
         });
 
-        // NEW: Aggregate budget data
         const budgetStats = await prisma.project.aggregate({
             where: projectQuery,
             _sum: {
@@ -65,8 +62,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
                 spent: true
             }
         });
-
-        // Chart data logic
         let chartData: { label: string; value: number }[] = [];
         let initialSpend = 0;
 
@@ -91,7 +86,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
                 return { label: month, value: monthTasksCount };
             });
         } else {
-            // Original daily Current Month logic
             const startOfMonth = new Date();
             startOfMonth.setDate(1);
             startOfMonth.setHours(0, 0, 0, 0);
@@ -145,7 +139,6 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
             }
         });
     } catch (error) {
-        console.error('Get KPIs error:', error);
         res.status(500).json({ message: 'Error fetching KPIs' });
     }
 };
@@ -182,7 +175,6 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
 
         res.json({ recentActivity: recentTasks });
     } catch (error) {
-        console.error('Get recent activity error:', error);
         res.status(500).json({ message: 'Error fetching recent activity' });
     }
 };
@@ -219,7 +211,6 @@ export const getProjectStats = async (req: AuthRequest, res: Response) => {
 
         res.json({ projectStats: projects });
     } catch (error) {
-        console.error('Get project stats error:', error);
         res.status(500).json({ message: 'Error fetching project stats' });
     }
 };

@@ -21,7 +21,6 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Invalid Task ID format" });
         }
 
-        // Check if task exists and get its team members
         const task = await prisma.task.findUnique({
             where: { id: taskId },
             include: {
@@ -64,15 +63,11 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Identify all recipients (Team Members + Project Manager)
         const teamMembers = task.project?.team?.members.map(m => m.userId) || [];
         const managerId = task.project?.managerId;
 
-        // Use a Set to ensure unique user IDs
         const recipients = new Set([...teamMembers]);
         if (managerId) recipients.add(managerId);
-
-        console.log(`Checking for notifications: ${recipients.size} potential recipients. AuthorId=${authorId}`);
 
         for (const recipientId of recipients) {
             if (recipientId !== authorId) {
@@ -91,10 +86,8 @@ export const createComment = async (req: AuthRequest, res: Response) => {
                             }
                         }
                     });
-                    console.log(`Notification created for user ${recipientId}, emitting now...`);
                     emitNotification(recipientId, notification);
 
-                    // Also emit a real-time comment event for updating the comment list UI
                     const { getIO } = require('../config/socket');
                     const io = getIO();
                     if (io) {
@@ -111,7 +104,6 @@ export const createComment = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(comment);
     } catch (error: unknown) {
-        console.error("Create Comment - Error:", error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({ message: "Error creating comment", error: errorMessage });
     }
@@ -141,7 +133,6 @@ export const getCommentsByTaskId = async (req: AuthRequest, res: Response) => {
 
         res.json({ comments });
     } catch (error: unknown) {
-        console.error("Get Comments - Error:", error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({ message: "Error fetching comments", error: errorMessage });
     }
@@ -170,7 +161,6 @@ export const deleteComment = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: "Comment deleted successfully" });
     } catch (error: unknown) {
-        console.error("Delete Comment - Error:", error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({ message: "Error deleting comment", error: errorMessage });
     }

@@ -36,7 +36,6 @@ export const getBudgetOverview = async (req: AuthRequest, res: Response) => {
             projects
         });
     } catch (error) {
-        console.error('Get budget error:', error);
         res.status(500).json({ message: 'Error fetching budget' });
     }
 };

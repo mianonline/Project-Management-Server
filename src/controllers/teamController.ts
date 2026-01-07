@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../../types';
-import { inviteTeamEmailTemplate, addedToTeamEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
-import { mailTransport } from '../utils/EmailTemplate/mail';
+import { inviteTeamEmailTemplate, addedToTeamEmailTemplate } from '../services/EmailTemplate/emailTemplate';
+import { mailTransport } from '../services/EmailTemplate/mail';
 import crypto from 'crypto';
 import { emitNotification } from '../config/socket';
 
@@ -10,14 +10,13 @@ const prisma = new PrismaClient();
 
 export const createTeam = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, memberIds } = req.body; // Expect memberIds array of userIds
+        const { name, memberIds } = req.body;
 
         if (!name) return res.status(400).json({ message: "Team name is required" });
 
         const existingTeam = await prisma.team.findUnique({ where: { name } });
         if (existingTeam) return res.status(400).json({ message: "Team name already exists" });
 
-        // Create team and assign members if provided
         const team = await prisma.team.create({
             data: {
                 name,
@@ -33,7 +32,6 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
         const sender = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { avatar: true } });
         const senderAvatar = sender?.avatar;
 
-        // Send notifications and emails to all members
         if (memberIds && memberIds.length > 0) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const users = await prisma.user.findMany({
@@ -41,7 +39,6 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
             });
 
             for (const member of users) {
-                // 1. In-app notification
                 const notification = await prisma.notification.create({
                     data: {
                         userId: member.id,
@@ -57,10 +54,10 @@ export const createTeam = async (req: AuthRequest, res: Response) => {
                     }
                 });
 
-                // Real-time emit
+
                 emitNotification(member.id, notification);
 
-                // 2. Email alert
+
                 try {
                     const html = addedToTeamEmailTemplate(
                         req.user?.name || "Department Admin",
@@ -95,10 +92,7 @@ export const getTeam = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const role = req.user!.role;
 
-        // Role-based filtering:
-        // - MANAGER sees all teams
-        // - MEMBER sees only teams they are part of
-        const where: any = role === 'MANAGER'
+        const where: Prisma.TeamWhereInput = role === 'MANAGER'
             ? {}
             : { members: { some: { userId } } };
 
@@ -114,7 +108,6 @@ export const getTeam = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Keeping "users" as the key to maintain compatibility with current frontend state
         res.json({ users: teams });
     } catch (error) {
         console.error('Get teams error:', error);
@@ -128,18 +121,15 @@ export const getTeamMembers = async (req: AuthRequest, res: Response) => {
 
         if (!teamId) return res.status(400).json({ message: "Team ID is required" });
 
-        // 1️⃣ TeamMember table se members la lo
         const teamMembers = await prisma.teamMember.findMany({
             where: { teamId: String(teamId) },
-            select: { userId: true } // sirf userId chahiye
+            select: { userId: true }
         });
 
-        // 2️⃣ Agar koi member nahi
         if (teamMembers.length === 0) {
             return res.status(404).json({ message: "No members found for this team" });
         }
 
-        // 3️⃣ User details fetch karo
         const userIds = teamMembers.map(m => m.userId);
 
         const users = await prisma.user.findMany({
@@ -150,7 +140,6 @@ export const getTeamMembers = async (req: AuthRequest, res: Response) => {
         res.json({ users });
 
     } catch (error) {
-        console.error('Get team members error:', error);
         res.status(500).json({ message: 'Error fetching team members' });
     }
 };
@@ -183,7 +172,6 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
         if (emails && Array.isArray(emails)) {
             emailList = emails;
         } else if (email) {
-            // Support comma separated string as well
             emailList = typeof email === 'string' ? email.split(',').map(e => e.trim()).filter(e => e) : [email];
         }
 
@@ -191,7 +179,6 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Required fields missing" });
         }
 
-        // Find the team
         const team = await prisma.team.findUnique({
             where: { name: teamName }
         });
@@ -207,10 +194,8 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
 
         for (const targetEmail of emailList) {
             try {
-                // Generate unique token
                 const token = crypto.randomBytes(32).toString('hex');
 
-                // Create invitation in DB
                 await prisma.invitation.upsert({
                     where: {
                         email_teamId: {
@@ -249,7 +234,6 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
                     html,
                 });
 
-                // NEW: Create in-app notification if user exists
                 const existingUser = await prisma.user.findUnique({
                     where: { email: targetEmail }
                 });
@@ -271,12 +255,10 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
                         }
                     });
 
-                    // Real-time emit
                     emitNotification(existingUser.id, notification);
                 }
                 results.push({ email: targetEmail, status: 'sent' });
             } catch (err) {
-                console.error(`Failed to invite ${targetEmail}:`, err);
                 results.push({ email: targetEmail, status: 'failed' });
             }
         }
@@ -287,7 +269,6 @@ export const inviteTeamMember = async (req: AuthRequest, res: Response) => {
         });
 
     } catch (error) {
-        console.error("Invite email error:", error);
         return res.status(500).json({ message: "Failed to process invitations" });
     }
 };
@@ -305,14 +286,12 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: "Invitation not found." });
         }
 
-        // Verify identity
         if (req.user?.email !== invitation.email) {
             return res.status(403).json({
                 message: `This invitation was sent to ${invitation.email}. You are logged in as ${req.user?.email}.`
             });
         }
 
-        // Check if already accepted
         if (invitation.status === 'ACCEPTED') {
             return res.status(200).json({ message: "You have already accepted this invitation!" });
         }
@@ -321,7 +300,7 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "This invitation was previously declined." });
         }
 
-        // Find user by email
+
         const user = await prisma.user.findUnique({
             where: { email: invitation.email }
         });
@@ -330,7 +309,6 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: "User account not found. Please register first." });
         }
 
-        // Check if already in team (even if invitation record is pending)
         const existingMember = await prisma.teamMember.findUnique({
             where: {
                 userId_teamId: {
@@ -341,7 +319,6 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
         });
 
         if (existingMember) {
-            // Sync invitation status just in case
             await prisma.invitation.update({
                 where: { id: invitation.id },
                 data: { status: 'ACCEPTED' }
@@ -349,7 +326,6 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
             return res.status(200).json({ message: "You are already a member of this team!" });
         }
 
-        // Add user to team
         await prisma.teamMember.create({
             data: {
                 userId: user.id,
@@ -358,7 +334,6 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        // Update invitation status
         await prisma.invitation.update({
             where: { id: invitation.id },
             data: { status: 'ACCEPTED' }
@@ -367,7 +342,6 @@ export const acceptInvitation = async (req: AuthRequest, res: Response) => {
         return res.status(200).json({ message: `Successfully joined team ${invitation.team.name}` });
 
     } catch (error: unknown) {
-        console.error("Accept invitation error:", error);
         return res.status(500).json({ message: "Error processing invitation" });
     }
 };
@@ -384,14 +358,14 @@ export const declineInvitation = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Invalid or expired invitation" });
         }
 
-        // Verify identity
+
         if (req.user?.email !== invitation.email) {
             return res.status(403).json({
                 message: "You cannot decline an invitation sent to another email."
             });
         }
 
-        // Update invitation status
+
         await prisma.invitation.update({
             where: { id: invitation.id },
             data: { status: 'DECLINED' }
@@ -400,7 +374,6 @@ export const declineInvitation = async (req: AuthRequest, res: Response) => {
         return res.status(200).json({ message: "Invitation declined successfully" });
 
     } catch (error) {
-        console.error("Decline invitation error:", error);
         return res.status(500).json({ message: "Error declining invitation" });
     }
 };
@@ -413,7 +386,6 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
 
         if (!teamId) return res.status(400).json({ message: "Team ID is required" });
 
-        // 1. Get all projects belonging to this team
         const teamProjects = await prisma.project.findMany({
             where: { teamId: String(teamId) },
             select: { id: true, name: true, budget: true, spent: true }
@@ -421,7 +393,6 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
 
         const projectIds = teamProjects.map(p => p.id);
 
-        // 2. Task Status Counts
         const [completedTasks, totalTasks, overdueTasks] = await Promise.all([
             prisma.task.count({ where: { projectId: { in: projectIds }, status: 'COMPLETED' } }),
             prisma.task.count({ where: { projectId: { in: projectIds } } }),
@@ -436,11 +407,9 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
 
         const incompleteTasks = totalTasks - completedTasks;
 
-        // 3. Financials
         const totalBudget = teamProjects.reduce((sum, p) => sum + p.budget, 0);
         const totalSpent = teamProjects.reduce((sum, p) => sum + p.spent, 0);
 
-        // 4. Monthly completed tasks for Chart
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         let barchartData: { label: string; value: number }[] = [];
 
@@ -463,7 +432,6 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
                 return { label: month, value: monthTasksCount };
             });
         } else {
-            // Default: last 12 months
             const twelveMonthsAgo = new Date();
             twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
             twelveMonthsAgo.setDate(1);
@@ -489,7 +457,6 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // 5. Top Team Members (by completed tasks)
         const teamMembers = await prisma.teamMember.findMany({
             where: { teamId: String(teamId) },
             include: { user: { select: { id: true, name: true, avatar: true, role: true } } }
@@ -510,18 +477,28 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
 
         const topMembers = memberStats.sort((a, b) => b.completedTasks - a.completedTasks).slice(0, 5);
 
-        // 6. Top Earning/Spend Projects
-        const topProjects = [...teamProjects]
-            .sort((a, b) => b.spent - a.spent)
-            .slice(0, 5)
-            .map(p => ({
-                id: p.id,
-                name: p.name,
-                spent: p.spent,
-                completedTasks: 0 // Will fill if needed
-            }));
+        const topProjectsData = await Promise.all(
+            [...teamProjects]
+                .sort((a, b) => b.spent - a.spent)
+                .slice(0, 5)
+                .map(async (p) => {
+                    const completedCount = await prisma.task.count({
+                        where: {
+                            projectId: p.id,
+                            status: 'COMPLETED'
+                        }
+                    });
+                    return {
+                        id: p.id,
+                        name: p.name,
+                        spent: p.spent,
+                        completedTasks: completedCount
+                    };
+                })
+        );
 
-        // 7. Recent Activity (Timeline)
+        const topProjects = topProjectsData;
+
         const recentActivities = await prisma.task.findMany({
             where: { projectId: { in: projectIds } },
             orderBy: { updatedAt: 'desc' },
@@ -551,7 +528,6 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
         });
 
     } catch (error) {
-        console.error("Get team stats error:", error);
         res.status(500).json({ message: "Error fetching team statistics" });
     }
 };
@@ -559,37 +535,33 @@ export const getTeamStats = async (req: AuthRequest, res: Response) => {
 export const getTeamFiles = async (req: AuthRequest, res: Response) => {
     try {
         const { teamId } = req.params;
-        console.log("Fetching files for teamId:", teamId);
 
         if (!teamId) return res.status(400).json({ message: "Team ID is required" });
 
-        // 1. Get all projects in this team
+
         const projects = await prisma.project.findMany({
             where: { teamId: String(teamId) },
             select: { id: true }
         });
 
         const projectIds = projects.map(p => p.id);
-        console.log(`Found ${projectIds.length} projects for team ${teamId}`);
 
         if (projectIds.length === 0) {
             return res.json({ files: [] });
         }
 
-        // 2. Get all tasks for these projects
         const tasks = await prisma.task.findMany({
             where: { projectId: { in: projectIds } },
             select: { id: true, name: true }
         });
 
         const taskIds = tasks.map(t => t.id);
-        console.log(`Found ${taskIds.length} tasks for these projects`);
+
 
         if (taskIds.length === 0) {
             return res.json({ files: [] });
         }
 
-        // 3. Find all comments in these tasks
         const comments = await prisma.comment.findMany({
             where: { taskId: { in: taskIds } },
             include: {
@@ -599,7 +571,6 @@ export const getTeamFiles = async (req: AuthRequest, res: Response) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // 4. Flatten and map to file structure (filtering non-empty attachments)
         const files: {
             id: string;
             name: string;
@@ -635,11 +606,9 @@ export const getTeamFiles = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        console.log(`Returning ${files.length} filtered files`);
         res.json({ files });
 
     } catch (error) {
-        console.error("Get team files error:", error);
         res.status(500).json({ message: "Error fetching team files" });
     }
 };

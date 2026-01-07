@@ -4,8 +4,8 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../../types';
 import crypto from 'crypto';
-import { mailTransport } from '../utils/EmailTemplate/mail';
-import { forgotPasswordEmailTemplate, welcomeEmailTemplate } from '../utils/EmailTemplate/emailTemplate';
+import { mailTransport } from '../services/EmailTemplate/mail';
+import { forgotPasswordEmailTemplate, welcomeEmailTemplate } from '../services/EmailTemplate/emailTemplate';
 
 const prisma = new PrismaClient();
 
@@ -14,7 +14,6 @@ export const register = async (req: Request, res: Response) => {
         const { email, role } = req.body;
         let { name, password } = req.body;
 
-        // Check if user exists
         const existingUser = await prisma.user.findUnique({
             where: { email },
         });
@@ -24,23 +23,19 @@ export const register = async (req: Request, res: Response) => {
             return;
         }
 
-        // Check if password is provided, if not generate a random one
         let generatedPassword = "";
         if (!password) {
-            generatedPassword = crypto.randomBytes(5).toString('hex'); // 10 characters
+            generatedPassword = crypto.randomBytes(5).toString('hex');
             password = generatedPassword;
         }
 
-        // Set default name if not provided
         if (!name) {
             name = email.split('@')[0];
         }
 
-        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create user
         const user = await prisma.user.create({
             data: {
                 email,
@@ -60,7 +55,6 @@ export const register = async (req: Request, res: Response) => {
             await mailTransport.sendMail(mailOptions);
         }
 
-        // Generate token
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET!,
@@ -80,7 +74,6 @@ export const register = async (req: Request, res: Response) => {
             message: generatedPassword ? "Account created and password sent to email" : "Registration successful"
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -139,7 +132,6 @@ export const login = async (req: Request, res: Response) => {
             },
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -179,7 +171,6 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
             password: undefined
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -231,7 +222,6 @@ export const googleAuth = async (req: Request, res: Response) => {
             return;
         }
 
-        // Generate token for both new and existing users
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET!,
@@ -251,7 +241,6 @@ export const googleAuth = async (req: Request, res: Response) => {
             },
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -301,7 +290,6 @@ export const githubAuth = async (req: Request, res: Response) => {
             return;
         }
 
-        // Generate token for both new and existing users
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, name: user.name },
             process.env.JWT_SECRET!,
@@ -321,14 +309,12 @@ export const githubAuth = async (req: Request, res: Response) => {
             },
         });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
 
 
-// get all users for Team Members 
 export const getAllUsers = async (req: AuthRequest, res: Response) => {
     try {
         const users = await prisma.user.findMany({
@@ -351,12 +337,10 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
         });
         res.json({ users });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: "Error fetching users" });
     }
 };
 
-// Edit Profile 
 export const editProfile = async (req: AuthRequest, res: Response) => {
     try {
         const { name, avatar } = req.body;
@@ -366,7 +350,6 @@ export const editProfile = async (req: AuthRequest, res: Response) => {
         });
         res.json(user);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: "Error updating profile" });
     }
 };
@@ -402,7 +385,6 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
             data: { password: hashedPassword }
         });
 
-        // Create and Emit Notification
         const notification = await prisma.notification.create({
             data: {
                 userId: userId as string,
@@ -418,7 +400,7 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: "Password updated successfully" });
     } catch (error) {
-        console.error(error);
+
         res.status(500).json({ message: "Error changing password" });
     }
 };
@@ -438,7 +420,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
         }
 
         const resetToken = crypto.randomBytes(20).toString('hex');
-        const resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+        const resetPasswordExpires = new Date(Date.now() + 3600000);
 
         await prisma.user.update({
             where: { email },
@@ -461,7 +443,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
         res.json({ message: "Password reset link sent to your email" });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: "Error sending reset link" });
     }
 };
@@ -502,7 +483,6 @@ export const resetPassword = async (req: Request, res: Response) => {
 
         res.json({ message: "Password has been reset successfully" });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: "Error resetting password" });
     }
 };

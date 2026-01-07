@@ -1,6 +1,13 @@
 import { Request } from 'express';
 import { Socket } from 'socket.io';
 
+// ==================== Error Types ====================
+
+export interface PrismaError extends Error {
+    code?: string;
+    meta?: unknown;
+}
+
 // ==================== Enums ====================
 
 export enum UserRole {

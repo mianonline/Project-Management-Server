@@ -16,17 +16,6 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.post("/", createProject);
-// router.post(
-//     '/createroject',
-//     requireManager,
-//     [
-//         body('name').notEmpty().withMessage('Project name is required'),
-//         body('startDate').isISO8601(),
-//         body('endDate').isISO8601(),
-//         validate
-//     ],
-//     createProject
-// );
 
 router.get('/', getProjects);
 router.get('/:id', getProjectById);

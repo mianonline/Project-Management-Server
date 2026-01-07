@@ -54,7 +54,7 @@ export const getIO = () => {
     return io;
 };
 
-// Helper function to send notification to a specific user
+
 export const emitNotification = (userId: string, notification: Notification) => {
     if (io) {
         console.log(`Emitting notification to user ${userId}:`, notification.title);

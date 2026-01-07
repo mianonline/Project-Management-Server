@@ -16,7 +16,6 @@ export const getNotifications = async (req: AuthRequest, res: Response) => {
 
         res.json({ notifications });
     } catch (error) {
-        console.error("Get notifications error:", error);
         res.status(500).json({ message: "Error fetching notifications" });
     }
 };
@@ -41,7 +40,6 @@ export const markAsRead = async (req: AuthRequest, res: Response) => {
 
         res.json({ notification: updatedNotification });
     } catch (error) {
-        console.error("Mark as read error:", error);
         res.status(500).json({ message: "Error updating notification" });
     }
 };
@@ -65,7 +63,6 @@ export const deleteNotification = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: "Notification deleted" });
     } catch (error) {
-        console.error("Delete notification error:", error);
         res.status(500).json({ message: "Error deleting notification" });
     }
 };

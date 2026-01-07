@@ -21,12 +21,11 @@ export const getProductivityReport = async (req: AuthRequest, res: Response) => 
             name: user.name,
             completedTasks: user._count.assignedTasks,
             createdTasks: user._count.createdTasks,
-            score: user._count.assignedTasks * 10 // Simple scoring logic
+            score: user._count.assignedTasks * 10
         }));
 
         res.json({ productivity });
     } catch (error) {
-        console.error('Productivity report error:', error);
         res.status(500).json({ message: 'Error generating report' });
     }
 };

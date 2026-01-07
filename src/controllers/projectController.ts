@@ -13,7 +13,6 @@ export const createProject = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: "Project name is required" });
         }
 
-        // Defaults if UI doesn't provide them
         const start = startDate ? new Date(startDate) : new Date();
         const end = endDate ? new Date(endDate) : new Date(new Date().setMonth(new Date().getMonth() + 1));
         const initialBudget = budget ? parseFloat(budget) : 0;
@@ -26,7 +25,7 @@ export const createProject = async (req: AuthRequest, res: Response) => {
                 endDate: end,
                 budget: initialBudget,
                 managerId: req.user!.id,
-                status: 'active', // Default status
+                status: 'active',
                 spent: 0,
                 teamId: teamId
             }
@@ -38,7 +37,6 @@ export const createProject = async (req: AuthRequest, res: Response) => {
         });
 
     } catch (error) {
-        console.error("Create Project Error:", error);
         res.status(500).json({ error: "Server error" });
     }
 };
@@ -75,7 +73,6 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 
         res.json({ projects });
     } catch (error) {
-        console.error('Get projects error:', error);
         res.status(500).json({ message: 'Error fetching projects' });
     }
 };
@@ -108,7 +105,6 @@ export const getProjectById = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ message: 'Project not found' });
         }
 
-        // Permission Check for Members
         if (req.user?.role === 'MEMBER') {
             const isTeamMember = await prisma.teamMember.findFirst({
                 where: { userId: req.user.id, teamId: project.teamId as string }
