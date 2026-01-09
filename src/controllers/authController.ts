@@ -180,6 +180,10 @@ export const googleAuth = async (req: Request, res: Response) => {
     try {
         const { email, name, photoURL } = req.body;
 
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required for Google authentication.' });
+        }
+
 
         let user = await prisma.user.findUnique({
             where: { email },
@@ -247,6 +251,10 @@ export const googleAuth = async (req: Request, res: Response) => {
 export const githubAuth = async (req: Request, res: Response) => {
     try {
         const { email, name, photoURL } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required for GitHub authentication.' });
+        }
 
 
         let user = await prisma.user.findUnique({
