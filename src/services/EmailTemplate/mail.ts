@@ -2,8 +2,8 @@ import nodemailer from 'nodemailer'
 
 export const mailTransport = nodemailer.createTransport({
     host: "smtp.gmail.com",
-    port: 465,
-    secure: true, // use SSL
+    port: 587,
+    secure: false, // true for 465, false for other ports
     pool: true,   // reuse connections
     auth: {
         user: process.env.EMAIL_USER,
