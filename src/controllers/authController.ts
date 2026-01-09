@@ -439,6 +439,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
         });
 
         const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}`;
+        console.log(`[Forgot Password] Attempting to send email to ${user.email}...`);
+        const startTime = Date.now();
 
         const mailOptions = {
             from: process.env.EMAIL_USER,
@@ -448,9 +450,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
         };
 
         await mailTransport.sendMail(mailOptions);
+        console.log(`[Forgot Password] Email sent successfully in ${Date.now() - startTime}ms`);
 
         res.json({ message: "Password reset link sent to your email" });
     } catch (error) {
+        console.error("[Forgot Password] Error:", error);
         res.status(500).json({ message: "Error sending reset link" });
     }
 };
