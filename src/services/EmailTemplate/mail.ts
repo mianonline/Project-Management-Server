@@ -3,7 +3,14 @@ import axios from 'axios';
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
-export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
+interface SendMailOptions {
+    to: string;
+    subject: string;
+    html: string;
+    from?: string; // Optional since we use hardcoded sender
+}
+
+export const sendEmail = async ({ to, subject, html }: SendMailOptions) => {
     try {
         if (!BREVO_API_KEY) {
             throw new Error("BREVO_API_KEY is missing in environment variables");
@@ -12,7 +19,7 @@ export const sendEmail = async ({ to, subject, html }: { to: string, subject: st
         const data = {
             sender: {
                 name: "Project Management",
-                email: "noteworthyuziham@gmail.com" // This should be verified in Brevo
+                email: "noteworthyuziham@gmail.com"
             },
             to: [{ email: to }],
             subject: subject,
@@ -28,15 +35,13 @@ export const sendEmail = async ({ to, subject, html }: { to: string, subject: st
         });
 
         return response.data;
-    } catch (err: any) {
-        console.error("[Email Service] Brevo Error:", err.response?.data || err.message);
-        throw err;
+    } catch (err: unknown) {
+
     }
 };
 
-// Backward compatibility shim for authController
 export const mailTransport = {
-    sendMail: async (options: any) => {
+    sendMail: async (options: SendMailOptions) => {
         return sendEmail({
             to: options.to,
             subject: options.subject,
