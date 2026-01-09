@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient, Prisma, TaskStatus, TaskPriority } from '@prisma/client';
 import { AuthRequest, PrismaError } from '../../types';
+import { getIO } from '../config/socket';
 
 
 
@@ -26,6 +27,12 @@ export const addSubtask = async (req: AuthRequest, res: Response) => {
                 completed: false
             }
         });
+
+        // Emit real-time update
+        const io = getIO();
+        if (io) {
+            io.to(taskId).emit('subtask_added', subtask);
+        }
 
         res.status(201).json(subtask);
     } catch (error: unknown) {
@@ -53,6 +60,12 @@ export const toggleSubtask = async (req: AuthRequest, res: Response) => {
                 completed: !subtask.completed
             }
         });
+
+        // Emit real-time update
+        const io = getIO();
+        if (io) {
+            io.to(updatedSubtask.taskId).emit('subtask_updated', updatedSubtask);
+        }
 
         res.json(updatedSubtask);
     } catch (error: unknown) {

@@ -42,6 +42,21 @@ export const initSocket = (server: HttpServer) => {
         socket.on('disconnect', () => {
             console.log(`User disconnected: ${user?.name || 'Unknown'}`);
         });
+
+        // Room management for real-time task updates
+        socket.on('join_task', (taskId: string) => {
+            if (user) {
+                console.log(`User ${user.name} joining task room: ${taskId}`);
+                socket.join(taskId);
+            }
+        });
+
+        socket.on('leave_task', (taskId: string) => {
+            if (user) {
+                console.log(`User ${user.name} leaving task room: ${taskId}`);
+                socket.leave(taskId);
+            }
+        });
     });
 
     return io;
