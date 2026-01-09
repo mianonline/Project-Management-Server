@@ -453,9 +453,17 @@ export const forgotPassword = async (req: Request, res: Response) => {
         console.log(`[Forgot Password] Email sent successfully in ${Date.now() - startTime}ms`);
 
         res.json({ message: "Password reset link sent to your email" });
-    } catch (error) {
-        console.error("[Forgot Password] Error:", error);
-        res.status(500).json({ message: "Error sending reset link" });
+    } catch (error: any) {
+        console.error("[Forgot Password] Detailed Error:", {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            command: error.command
+        });
+        res.status(500).json({
+            message: "Error sending reset link",
+            debug: error.message // Temporarily adding error message to help user see the cause
+        });
     }
 };
 
