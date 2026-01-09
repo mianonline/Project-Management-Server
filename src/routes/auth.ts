@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getProfile, googleAuth, getAllUsers, editProfile, changePassword, forgotPassword, resetPassword, githubAuth } from '../controllers/authController';
+import { register, login, getProfile, googleAuth, getAllUsers, editProfile, changePassword, forgotPassword, resetPassword, githubAuth, deleteAccount } from '../controllers/authController';
 import { authMiddleware } from '../middleware/auth';
 import { body } from 'express-validator';
 import { validate } from '../middleware/validation';
@@ -30,6 +30,7 @@ router.post(
 router.get('/profile', authMiddleware, getProfile);
 router.put('/profile', authMiddleware, editProfile);
 router.put('/change-password', authMiddleware, changePassword);
+router.delete('/account', authMiddleware, deleteAccount);
 router.post('/google', googleAuth);
 router.post('/github', githubAuth);
 router.post('/forgot-password', forgotPassword);

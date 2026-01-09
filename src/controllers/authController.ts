@@ -497,3 +497,43 @@ export const resetPassword = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Error resetting password" });
     }
 };
+
+export const deleteAccount = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        // 1. Delete all Projects where the user is the manager
+        // Cascading will handle sections, tasks, events, etc. within those projects
+        await prisma.project.deleteMany({
+            where: { managerId: userId }
+        });
+
+        // 2. Clear assignedToId from tasks that were not deleted
+        await prisma.task.updateMany({
+            where: { assignedToId: userId },
+            data: { assignedToId: null }
+        });
+
+        // 3. Delete all tasks created by the user (if any remaining)
+        await prisma.task.deleteMany({
+            where: { createdById: userId }
+        });
+
+        // 4. Delete all comments authored by the user
+        await prisma.comment.deleteMany({
+            where: { authorId: userId }
+        });
+
+        // 5. Finally delete the user
+        // Prisma's Cascade on User will handle: teamMemberships, notifications, and eventAttendees
+        await prisma.user.delete({
+            where: { id: userId }
+        });
+
+        res.json({ message: "Account deleted successfully" });
+    } catch (error: unknown) {
+        console.error("[Delete Account] Error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Error deleting account";
+        res.status(500).json({ message: errorMessage });
+    }
+};
