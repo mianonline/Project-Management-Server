@@ -9,6 +9,12 @@ export const mailTransport = nodemailer.createTransport({
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
+    connectionTimeout: 15000, // Increase to 15s
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
+    logger: true, // Log to console
+    debug: true,  // Include SMTP traffic in logs
+    tls: {
+        rejectUnauthorized: false // Helps in some cloud environments
+    }
 });
