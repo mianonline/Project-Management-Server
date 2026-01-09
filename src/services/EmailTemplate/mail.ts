@@ -1,29 +1,40 @@
-import { Resend } from 'resend';
+import axios from 'axios';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
     try {
-        const { data, error } = await resend.emails.send({
-            from: 'Project Management <onboarding@resend.dev>', // You can change this after domain verification
-            to: [to],
-            subject: subject,
-            html: html,
-        });
-
-        if (error) {
-            console.error("[Email Service] Resend Error:", error);
-            throw error;
+        if (!BREVO_API_KEY) {
+            throw new Error("BREVO_API_KEY is missing in environment variables");
         }
 
-        return data;
-    } catch (err) {
-        console.error("[Email Service] Failed to send email:", err);
+        const data = {
+            sender: {
+                name: "Project Management",
+                email: "noteworthyuziham@gmail.com" // This should be verified in Brevo
+            },
+            to: [{ email: to }],
+            subject: subject,
+            htmlContent: html,
+        };
+
+        const response = await axios.post(BREVO_API_URL, data, {
+            headers: {
+                'accept': 'application/json',
+                'api-key': BREVO_API_KEY,
+                'content-type': 'application/json',
+            },
+        });
+
+        return response.data;
+    } catch (err: any) {
+        console.error("[Email Service] Brevo Error:", err.response?.data || err.message);
         throw err;
     }
 };
 
-// Keep for backward compatibility if needed, but we should migrate to sendEmail
+// Backward compatibility shim for authController
 export const mailTransport = {
     sendMail: async (options: any) => {
         return sendEmail({
