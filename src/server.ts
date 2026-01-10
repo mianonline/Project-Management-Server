@@ -20,6 +20,7 @@ import reportRoutes from './routes/reports';
 import sectionsRoutes from './routes/sections';
 import notificationRoutes from './routes/notification';
 import commentRoutes from './routes/comments';
+import cloudinaryRoutes from './routes/cloudinary';
 
 const app = express();
 const httpServer = createServer(app);
@@ -45,6 +46,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/sections', sectionsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/cloudinary', cloudinaryRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
