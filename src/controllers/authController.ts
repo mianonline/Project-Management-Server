@@ -248,6 +248,7 @@ export const googleAuth = async (req: Request, res: Response) => {
         role: user.role,
         teamMemberships: user.teamMemberships || [],
         hasPassword: !!user.password,
+        hasSeenWelcome: user.hasSeenWelcome,
       },
     });
   } catch (error) {
@@ -319,6 +320,7 @@ export const githubAuth = async (req: Request, res: Response) => {
         role: user.role,
         teamMemberships: user.teamMemberships || [],
         hasPassword: !!user.password,
+        hasSeenWelcome: user.hasSeenWelcome,
       },
     });
   } catch (error) {
