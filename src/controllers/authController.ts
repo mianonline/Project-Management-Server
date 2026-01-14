@@ -70,6 +70,7 @@ export const register = async (req: Request, res: Response) => {
                 avatar: user.avatar,
                 role: user.role,
                 hasPassword: !!user.password,
+                hasSeenWelcome: user.hasSeenWelcome,
             },
             message: generatedPassword ? "Account created and password sent to email" : "Registration successful"
         });
@@ -129,6 +130,7 @@ export const login = async (req: Request, res: Response) => {
                 role: user.role,
                 teamMemberships: user.teamMemberships,
                 hasPassword: !!user.password,
+                hasSeenWelcome: user.hasSeenWelcome,
             },
         });
     } catch (error) {
@@ -147,6 +149,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
                 avatar: true,
                 role: true,
                 createdAt: true,
+                hasSeenWelcome: true,
                 teamMemberships: {
                     select: {
                         team: {
@@ -526,5 +529,17 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
         console.error("[Delete Account] Error:", error);
         const errorMessage = error instanceof Error ? error.message : "Error deleting account";
         res.status(500).json({ message: errorMessage });
+    }
+};
+export const completeWelcome = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        await prisma.user.update({
+            where: { id: userId },
+            data: { hasSeenWelcome: true }
+        });
+        res.status(200).json({ message: 'Welcome completed' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error completing welcome' });
     }
 };

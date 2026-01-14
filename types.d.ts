@@ -59,6 +59,7 @@ export interface User {
     avatar?: string;
     createdAt: Date;
     updatedAt: Date;
+    hasSeenWelcome: boolean;
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;
 }
@@ -408,6 +409,7 @@ export interface AuthResponse {
         name: string;
         role: string;
         avatar?: string;
+        hasSeenWelcome: boolean;
     };
 }
 

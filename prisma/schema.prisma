@@ -40,6 +40,7 @@ model User {
   avatar    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  hasSeenWelcome Boolean @default(false)
 
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
