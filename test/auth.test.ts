@@ -1,10 +1,10 @@
-// @ts-nocheck
 import dotenv from 'dotenv';
 dotenv.config();
 import request from 'supertest';
 import { expect } from 'chai';
 import app from '../src/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -28,8 +28,6 @@ describe('Auth API', () => {
     await prisma.$disconnect();
   });
 
-  let token = '';
-
   it('should register a new user with email only', async () => {
     const res = await request(app).post('/api/auth/register').send({
       email: 'test@example.com',
@@ -45,7 +43,6 @@ describe('Auth API', () => {
   it('should login the registered user', async () => {
     // Create user manually to have a known password
     const password = 'knownPassword123';
-    const bcrypt = require('bcryptjs'); // Import locally or at top
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await prisma.user.create({

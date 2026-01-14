@@ -8,20 +8,33 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
     const role = req.user!.role;
-    const { projectId, year } = req.query;
+    const { projectId, year, date } = req.query;
 
     const taskFilter: Prisma.TaskWhereInput =
       role === 'MANAGER'
         ? {}
         : {
-            AND: [
-              { OR: [{ assignedToId: userId }, { createdById: userId }] },
-              { project: { team: { members: { some: { userId } } } } },
-            ],
-          };
+          AND: [
+            { OR: [{ assignedToId: userId }, { createdById: userId }] },
+            { project: { team: { members: { some: { userId } } } } },
+          ],
+        };
 
     if (projectId && typeof projectId === 'string' && projectId !== 'all') {
       taskFilter.projectId = projectId;
+    }
+
+    if (date && typeof date === 'string') {
+      const selectedDate = new Date(date);
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      taskFilter.OR = [
+        { dueDate: { gte: startOfDay, lte: endOfDay } },
+        { createdAt: { gte: startOfDay, lte: endOfDay } },
+      ];
     }
 
     const [totalTasks, completedTasks, inProgressTasks, canceledTasks, overdueTasks] =
@@ -43,12 +56,12 @@ export const getKPIs = async (req: AuthRequest, res: Response) => {
       role === 'MANAGER'
         ? { status: 'active' }
         : {
-            status: 'active',
-            AND: [
-              { team: { members: { some: { userId } } } },
-              { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } },
-            ],
-          };
+          status: 'active',
+          AND: [
+            { team: { members: { some: { userId } } } },
+            { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } },
+          ],
+        };
 
     if (projectId && typeof projectId === 'string' && projectId !== 'all') {
       projectQuery.id = projectId;
@@ -173,11 +186,11 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
       role === 'MANAGER'
         ? {}
         : {
-            AND: [
-              { OR: [{ assignedToId: userId }, { createdById: userId }] },
-              { project: { team: { members: { some: { userId } } } } },
-            ],
-          };
+          AND: [
+            { OR: [{ assignedToId: userId }, { createdById: userId }] },
+            { project: { team: { members: { some: { userId } } } } },
+          ],
+        };
 
     if (projectId && typeof projectId === 'string' && projectId !== 'all') {
       taskFilter.projectId = projectId;
@@ -223,11 +236,11 @@ export const getProjectStats = async (req: AuthRequest, res: Response) => {
       role === 'MANAGER'
         ? {}
         : {
-            AND: [
-              { team: { members: { some: { userId } } } },
-              { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } },
-            ],
-          };
+          AND: [
+            { team: { members: { some: { userId } } } },
+            { tasks: { some: { OR: [{ assignedToId: userId }, { createdById: userId }] } } },
+          ],
+        };
 
     const projects = await prisma.project.findMany({
       where: projectFilter,

@@ -1,8 +1,8 @@
-// @ts-nocheck
 import request from 'supertest';
 import { expect } from 'chai';
 import app from '../src/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -25,7 +25,6 @@ describe('Project API', () => {
     }
 
     // Actually, to make it easier, let's create users directly in DB so we know the password
-    const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash('password123', 10);
 
     await prisma.user.create({
@@ -77,15 +76,6 @@ describe('Project API', () => {
     expect(res.status).to.equal(200);
     expect(res.body.projects).to.be.an('array');
     expect(res.body.projects).to.have.lengthOf.at.least(1);
-  });
-
-  it('should NOT allow Member to create project', async () => {
-    // Assuming your middleware or controller restricts this?
-    // If logic doesn't explicitly forbid MEMBER in code, this test might fail if RBAC isn't strict.
-    // Based on analysis, createProject doesn't seem to check role explicitly inside controller,
-    // but let's assume valid implementation should block it or maybe your requirements didn't specify.
-    // Actually, let's skip strict RBAC check on create for now if not implemented,
-    // but 'getProjects' has filtering logic.
   });
 
   it('should verify project details', async () => {

@@ -1,8 +1,8 @@
-// @ts-nocheck
 import request from 'supertest';
 import { expect } from 'chai';
 import app from '../src/server';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -25,7 +25,6 @@ describe('Task API', () => {
     }
 
     // Create Manager User
-    const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash('password123', 10);
 
     await prisma.user.create({
