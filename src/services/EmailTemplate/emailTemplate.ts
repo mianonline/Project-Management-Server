@@ -38,8 +38,9 @@ export const inviteTeamEmailTemplate = (
                   as a <strong style="color:#ffffff;">${role}</strong>.
                 </p>
 
-                ${personalMessage
-    ? `
+                ${
+                  personalMessage
+                    ? `
                       <div style="background:#1f2933; border-left:4px solid #facc15; padding:16px; border-radius:6px; margin:25px 0; text-align:left;">
                         <p style="margin:0; font-size:14px; color:#d1d5db;">
                           <strong style="color:#facc15;">Personal message:</strong><br/>
@@ -47,8 +48,8 @@ export const inviteTeamEmailTemplate = (
                         </p>
                       </div>
                     `
-    : ""
-  }
+                    : ''
+                }
 
                 <p style="font-size:14px; color:#9ca3af;">
                   Join us to collaborate securely, manage tasks, and build powerful solutions together.
@@ -184,10 +185,7 @@ export const addedToTeamEmailTemplate = (
   </div>
 `;
 
-export const forgotPasswordEmailTemplate = (
-  resetLink: string,
-  userName: string
-) => `
+export const forgotPasswordEmailTemplate = (resetLink: string, userName: string) => `
   <div style="background-color:#0b0b0b; padding:40px 20px;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>

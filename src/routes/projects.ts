@@ -1,10 +1,10 @@
 import express from 'express';
 import {
-    createProject,
-    getProjects,
-    getProjectById,
-    updateProject,
-    deleteProject
+  createProject,
+  getProjects,
+  getProjectById,
+  updateProject,
+  deleteProject,
 } from '../controllers/projectController';
 import { authMiddleware } from '../middleware/auth';
 import { requireManager } from '../middleware/roleCheck';
@@ -15,7 +15,7 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-router.post("/", createProject);
+router.post('/', createProject);
 
 router.get('/', getProjects);
 router.get('/:id', getProjectById);

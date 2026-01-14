@@ -1,5 +1,15 @@
 import express from 'express';
-import { getTeamMembers, updateMemberRole, createTeam, getTeam, inviteTeamMember, acceptInvitation, declineInvitation, getTeamStats, getTeamFiles } from '../controllers/teamController';
+import {
+  getTeamMembers,
+  updateMemberRole,
+  createTeam,
+  getTeam,
+  inviteTeamMember,
+  acceptInvitation,
+  declineInvitation,
+  getTeamStats,
+  getTeamFiles,
+} from '../controllers/teamController';
 import { authMiddleware } from '../middleware/auth';
 import { requireManager } from '../middleware/roleCheck';
 

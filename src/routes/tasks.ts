@@ -1,12 +1,12 @@
 import express from 'express';
 import {
-    createTask,
-    getTasks,
-    getTaskById,
-    updateTask,
-    deleteTask,
-    addSubtask,
-    toggleSubtask
+  createTask,
+  getTasks,
+  getTaskById,
+  updateTask,
+  deleteTask,
+  addSubtask,
+  toggleSubtask,
 } from '../controllers/taskController';
 import { authMiddleware } from '../middleware/auth';
 import { body } from 'express-validator';
@@ -16,16 +16,14 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-
-
 router.post(
-    '/',
-    [
-        body('name').notEmpty().withMessage('Task name is required'),
-        body('projectId').notEmpty().withMessage('Project ID is required'),
-        validate
-    ],
-    createTask
+  '/',
+  [
+    body('name').notEmpty().withMessage('Task name is required'),
+    body('projectId').notEmpty().withMessage('Project ID is required'),
+    validate,
+  ],
+  createTask
 );
 
 router.get('/', getTasks);
