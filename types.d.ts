@@ -318,18 +318,34 @@ export interface Notification {
     type: string;
     title: string;
     message: string;
-    data?: any;
+    data?: NotificationData;
     isRead: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
+
+export type NotificationData = {
+    teamId?: string;
+    teamName?: string;
+    addedBy?: string;
+    senderAvatar?: string;
+    token?: string;
+    invitedBy?: string;
+    taskId?: string;
+    commentId?: string;
+    commenterName?: string;
+    commenterAvatar?: string;
+    timestamp?: Date;
+    projectId?: string;
+    projectName?: string;
+};
 
 export interface CreateNotificationDTO {
     userId: string;
     type: NotificationType | string;
     title: string;
     message: string;
-    data?: any;
+    data?: NotificationData;
 }
 
 // ==================== Budget Related ====================
@@ -395,7 +411,7 @@ export interface AuthResponse {
     };
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
     message?: string;
     data?: T;
     error?: string;
@@ -403,13 +419,20 @@ export interface ApiResponse<T = any> {
 
 // ==================== Dashboard/Stats Related ====================
 
+export interface RecentActivity {
+    id: string;
+    name: string;
+    updatedAt: Date;
+    status: string;
+}
+
 export interface TeamStats {
     totalProjects: number;
     activeProjects: number;
     completedTasks: number;
     totalTasks: number;
     teamMembers: number;
-    recentActivity: any[];
+    recentActivity: RecentActivity[];
 }
 
 export interface ProjectStats {

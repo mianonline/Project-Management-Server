@@ -26,7 +26,8 @@ export const signCloudinary = async (req: Request, res: Response) => {
             api_key: process.env.CLOUDINARY_API_KEY,
             upload_preset: uploadPreset
         });
-    } catch (error: any) {
-        res.status(500).json({ message: 'Error generating Cloudinary signature', error: error.message });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ message: 'Error generating Cloudinary signature', error: errorMessage });
     }
 };
