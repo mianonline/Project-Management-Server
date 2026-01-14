@@ -17,6 +17,20 @@ export const addSubtask = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Subtask title is required' });
     }
 
+    const existingSubtask = await prisma.subtask.findFirst({
+      where: {
+        taskId,
+        title: {
+          equals: title,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (existingSubtask) {
+      return res.status(409).json({ message: 'A subtask with this name already exists' });
+    }
+
     const subtask = await prisma.subtask.create({
       data: {
         title,
